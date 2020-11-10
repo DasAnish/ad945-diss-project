@@ -42,6 +42,9 @@ class MultiHeadAttention(nn.Module):
         interim_result = torch.matmul(queries, keys.transpose(-2, -1)) / sqrt(self.d_k)
 
         # TODO: add the mask operation
+        if mask is not None:
+            mask = mask.unsqueeze(1)
+            interim_result = interim_result.masked_fill(mask == 0, -1e9)
 
         interim_result = F.softmax(interim_result, dim=-1)
 
