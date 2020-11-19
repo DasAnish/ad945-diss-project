@@ -9,34 +9,51 @@ from typing import List, Optional
 
 
 class TransformerEncoderLayer(nn.Module):
-    def __init__(self, model_dim: int, heads: int, d_ff: int, dropout: Optional[float] = 0.1):
+    def __init__(self, model_dim: int, heads: int, d_ff: int,
+                 dropout: Optional[float] = 0.1, norm_before: bool = False):
         super().__init__()
 
         self.model_dim: int = model_dim
         self.heads: int = heads
         self.dropout: float = dropout
+        self.norm_before: bool = norm_before
 
         self.self_attn: MultiHeadAttention = MultiHeadAttention(model_dim, heads, dropout)
 
         self.attn_dropout: nn.Dropout = nn.Dropout(dropout)
-        self.ff_dropout: nn.Dropout = nn.Dropout(dropout)
+        self.ffn_dropout: nn.Dropout = nn.Dropout(dropout)
 
-        self.ff: FeedForward = FeedForward(model_dim, d_ff, dropout)
+        self.ffn: FeedForward = FeedForward(model_dim, d_ff, dropout)
 
-        self.norm_after_attn: Norm = Norm(model_dim)
-        self.final_norm: Norm = Norm(model_dim)
+        self.attn_norm: Norm = Norm(model_dim)
+        self.ffn_norm: Norm = Norm(model_dim)
 
     def forward(self, x: Tensor, mask: Tensor = None) -> Tensor:
-        x += self.attn_dropout(self.self_attn(x, mask))
-        y = self.norm_after_attn(x)
-        x += self.ff(y)
-        y = self.norm_final(x)
-        return y
+        y = x
+        if self.norm_before:
+            y = self.attn_norm(x)
+        y = self.self_attn(y, mask)
+        y = self.attn_dropout(y)
+        x = x + y
+        if not self.norm_before:
+            x = self.attn_norm(x)
+
+        y = x
+        if self.norm_before:
+            y = self.ffn_norm(x)
+        y = self.ffn(y)
+        y = self.ffn_dropout(y)
+        x = x + y
+        if not self.norm_before:
+            x = self.ffn_norm(x)
+
+        return x
 
 
 class TransformerEncoder(nn.Module):
     def __init__(self, model_dim: int, d_ff: int, heads: int, num_blocks: int,
-                 vocab_size: int, max_seq_len: Optional[int] = 80, dropout: Optional[float] = 0.1):
+                 vocab_size: int, max_seq_len: Optional[int] = 80,
+                 dropout: Optional[float] = 0.1, norm_before: bool = False):
         super().__init__()
 
         self.model_dim: int = model_dim
@@ -48,8 +65,13 @@ class TransformerEncoder(nn.Module):
         self.word_embeddings: nn.Embedding = nn.Embedding(vocab_size, model_dim)
         self.positional_encoding: PositionalEncoding = PositionalEncoding(model_dim, max_seq_len)
 
-        encoding_layer: TransformerEncoderLayer = TransformerEncoderLayer(model_dim, heads, d_ff, dropout=dropout)
-        self.encoding_layers: List[TransformerEncoderLayer] = [encoding_layer.deepcopy() for _ in range(num_blocks)]
+        encoding_layer: TransformerEncoderLayer = TransformerEncoderLayer(model_dim,
+                                                                          heads,
+                                                                          d_ff,
+                                                                          dropout=dropout,
+                                                                          norm_before=norm_before)
+        self.encoding_layers: List[TransformerEncoderLayer] = [encoding_layer.deepcopy()
+                                                               for _ in range(num_blocks)]
 
     def forward(self, _input: Tensor, mask: Tensor):
         x = self.word_embeddings(_input)
@@ -61,43 +83,76 @@ class TransformerEncoder(nn.Module):
 
 
 class TransformerDecoderLayer(nn.Module):
-    def __init__(self, model_dim: int, heads: int, d_ff: int, dropout: Optional[float] = 0.1):
+    def __init__(self, model_dim: int, heads: int, d_ff: int,
+                 dropout: Optional[float] = 0.1, norm_before: bool = False):
         super().__init__()
 
         self.model_dim: int = model_dim
         self.heads: int = heads
         self.d_ff: int = d_ff
         self.dropout: float = dropout
+        self.norm_before: bool = norm_before
 
-        self.norm_after_self_attn: Norm = Norm(model_dim)
-        self.norm_after_encdec_attn: Norm = Norm(model_dim)
-        self.norm_after_ff: Norm = Norm(model_dim)
+        self.self_attn_norm: Norm = Norm(model_dim)
+        self.enc_dec_norm: Norm = Norm(model_dim)
+        self.ffn_norm: Norm = Norm(model_dim)
 
-        self.dropout_self_attn: nn.Dropout = nn.Dropout(dropout)
-        self.dropout_encdec_attn: nn.Dropout = nn.Dropout(dropout)
-        self.dropout_ff: nn.Dropout = nn.Dropout(dropout)
+        self.self_attn_dropout: nn.Dropout = nn.Dropout(dropout)
+        self.enc_dec_dropout: nn.Dropout = nn.Dropout(dropout)
+        self.ffn_dropout: nn.Dropout = nn.Dropout(dropout)
 
         self.self_attn: MultiHeadAttention = MultiHeadAttention(model_dim, heads, dropout)
         self.enc_dec_attn: MultiHeadAttention = MultiHeadAttention(model_dim, heads, dropout)
-        self.ff: FeedForward = FeedForward(model_dim, d_ff)
+        self.ffn: FeedForward = FeedForward(model_dim, d_ff)
 
     def forward(self, x: Tensor, encoder_output: Tensor, src_mask: Tensor, trg_mask: Tensor) -> Tensor:
-        x += self.dropout_self_attn(self.self_attn(x, trg_mask))
-        y = self.norm_after_self_attn(x)
 
-        # TODO: understand and replace this.
-        x += self.dropout_encdec_attn(self.enc_dec_attn(y, src_mask, encoder_output))
-        y = self.norm_after_encdec_attn(x)
+        y = x
+        if self.norm_before:
+            y = self.self_attn_norm(x)
+        y = self.self_attn(y)
+        y = self.self_attn_dropout(y)
+        x = x + y
+        if not self.norm_before:
+            x = self.self_attn_norm(x)
 
-        x += self.dropout_ff(self.ff(y))
-        y = self.norm_after_ff(x)
+        y = x
+        if self.norm_before:
+            y = self.enc_dec_norm(x)
+        y = self.enc_dec_attn(y, src_mask, encoder_output)
+        y = self.enc_dec_dropout(y)
+        x = x + y
+        if not self.norm_before:
+            x = self.enc_dec_norm(x)
 
-        return y
+        y = x
+        if self.norm_before:
+            y = self.ffn_norm(x)
+        y = self.ffn(y)
+        y = self.ffn_dropout(y)
+        x = x + y
+        if not self.norm_before:
+            x = self.ffn_norm(x)
+
+        return x
+
+        # x += self.dropout_self_attn(self.self_attn(x, trg_mask))
+        # y = self.norm_after_self_attn(x)
+        #
+        # # TODO: understand and replace this.
+        # x += self.dropout_encdec_attn(self.enc_dec_attn(y, src_mask, encoder_output))
+        # y = self.norm_after_encdec_attn(x)
+        #
+        # x += self.dropout_ff(self.ff(y))
+        # y = self.norm_after_ff(x)
+        #
+        # return y
 
 
 class TransformerDecoder(nn.Module):
     def __init__(self, model_dim: int, d_ff: int, heads: int, num_blocks: int,
-                 vocab_size: int, max_seq_len: Optional[int] = 80, dropout: Optional[float] = 0.1):
+                 vocab_size: int, max_seq_len: Optional[int] = 80,
+                 dropout: Optional[float] = 0.1, norm_before: bool = False):
         super().__init__()
 
         self.model_dim: int = model_dim
@@ -106,6 +161,7 @@ class TransformerDecoder(nn.Module):
         self.vocab_size: int = vocab_size
         self.max_seq_len: int = max_seq_len
         self.dropout: float = dropout
+        self.norm_before: bool = norm_before
 
         self.word_embeddings: nn.Embedding = nn.Embedding(vocab_size, model_dim)
         self.positional_embeddings: PositionalEncoding = PositionalEncoding(model_dim, max_seq_len)
@@ -126,13 +182,16 @@ class TransformerDecoder(nn.Module):
 class Transformer(nn.Module):
     def __init__(self, src_vocab_size: int, trg_vocab_size: int,
                  model_dim: int, d_ff: int, heads: int, num_blocks: int,
-                 max_seq_len: Optional[int] = 80, dropout: Optional[float] = 0.1):
+                 max_seq_len: Optional[int] = 80, dropout: Optional[float] = 0.1,
+                 norm_before: bool = False):
         super().__init__()
 
         self.encoder: TransformerEncoder = TransformerEncoder(model_dim, d_ff, heads, num_blocks,
-                                                              src_vocab_size, max_seq_len, dropout)
+                                                              src_vocab_size, max_seq_len, dropout,
+                                                              norm_before)
         self.decoder: TransformerDecoder = TransformerDecoder(model_dim, d_ff, heads, num_blocks,
-                                                              trg_vocab_size, max_seq_len, dropout)
+                                                              trg_vocab_size, max_seq_len, dropout,
+                                                              norm_before)
 
         self.linear: nn.Linear = nn.Linear(model_dim, trg_vocab_size)
 

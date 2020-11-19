@@ -2,24 +2,29 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from math import sqrt
+Tensor = torch.Tensor
+from typing import Optional
 
 
 class MultiHeadAttention(nn.Module):
-    def __init__(self, model_dim, heads, dropout=0.1):
+    def __init__(self, model_dim: int, heads: int, dropout: float = 0.1):
         super().__init__()
 
-        self.model_dim = model_dim
-        self.heads = heads
-        self.d_k = model_dim // heads
-        self.dropout = nn.Dropout(dropout)
+        self.model_dim: int = model_dim
+        self.heads: int = heads
+        self.d_k: int = model_dim // heads
+        self.dropout: nn.Dropout = nn.Dropout(dropout)
 
-        self.w_key = nn.Linear(model_dim, model_dim)
-        self.w_query = nn.Linear(model_dim, model_dim)
-        self.w_value = nn.Linear(model_dim, model_dim)
+        self.w_key: nn.Linear = nn.Linear(model_dim, model_dim)
+        self.w_query: nn.Linear = nn.Linear(model_dim, model_dim)
+        self.w_value: nn.Linear = nn.Linear(model_dim, model_dim)
 
-        self.final_layer = nn.Linear(model_dim, model_dim)
+        self.final_layer: nn.Linear = nn.Linear(model_dim, model_dim)
 
-    def forward(self, x, mask = None, encoder_output=None):
+    def forward(self, x: Tensor,
+                mask: Optional[Tensor] = None,
+                encoder_output: Optional[Tensor]=None):
+
         # X has the shape batch_size, seq_len, model_dim
 
         batch_size = x.size(0)
@@ -41,7 +46,6 @@ class MultiHeadAttention(nn.Module):
 
         interim_result = torch.matmul(queries, keys.transpose(-2, -1)) / sqrt(self.d_k)
 
-        # TODO: add the mask operation
         if mask is not None:
             mask = mask.unsqueeze(1)
             interim_result = interim_result.masked_fill(mask == 0, -1e9)
