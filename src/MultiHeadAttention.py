@@ -48,6 +48,7 @@ class MultiHeadAttention(nn.Module):
 
         if mask is not None:
             mask = mask.unsqueeze(1)
+            mask = mask.unsqueeze(3)
             interim_result = interim_result.masked_fill(mask == 0, -1e9)
 
         interim_result = F.softmax(interim_result, dim=-1)
@@ -55,6 +56,7 @@ class MultiHeadAttention(nn.Module):
         if self.dropout is not None:
             interim_result = self.dropout(interim_result)
 
+        # if mask is not None: print(f"interim_result.shape: {interim_result.shape} | values.shape: {values.shape}")
         interim_result = torch.matmul(interim_result, values)
 
         concatenated_result = interim_result.transpose(1, 2).contiguous().view(batch_size, -1, self.model_dim)

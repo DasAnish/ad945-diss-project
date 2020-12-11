@@ -46,8 +46,7 @@ class PositionalEncoding(nn.Module):
         x = x * sqrt(self.model_dim)
         sequence_length = x.size(1)
 
-        x = x + Variable(self.position_vector[:, :sequence_length], requires_grad=False)
-
+        x = x + Variable(self.position_vector[:sequence_length, :], requires_grad=False).expand_as(x)
         return x
 
 
