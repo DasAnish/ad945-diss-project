@@ -22,9 +22,17 @@ class PositionalEncoding(nn.Module):
 
     def __init__(self, model_dim: int, max_length: int):
         super().__init__()
+
+        if torch.cuda.is_available():
+            dev = "cuda:0"
+        else:
+            dev = "cpu"
+
+        device = torch.device(dev)
+
         self.model_dim: int = model_dim
 
-        position_vector: Tensor = torch.zeros(max_length, model_dim, requires_grad=False)
+        position_vector: Tensor = torch.zeros(max_length, model_dim, requires_grad=False).to(device)
         arange = torch.arange(max_length)
 
         # note to self: this appear to work right now.
@@ -57,12 +65,19 @@ class Norm(nn.Module):
     def __init__(self, model_dim: int, eps: float = 1e-5):
         super().__init__()
 
+        if torch.cuda.is_available():
+            dev = "cuda:0"
+        else:
+            dev = "cpu"
+
+        device = torch.device(dev)
+
         self.model_dim = model_dim
         self.eps = eps
 
         # two learnable parameters to get better normalizations
-        self.alpha: Tensor = nn.Parameter(torch.ones(self.model_dim))
-        self.bias: Tensor = nn.Parameter(torch.zeros(self.model_dim))
+        self.alpha: Tensor = nn.Parameter(torch.ones(self.model_dim)).to(device)
+        self.bias: Tensor = nn.Parameter(torch.zeros(self.model_dim)).to(device)
 
     def forward(self, x: Tensor) -> Tensor:
         """
@@ -84,9 +99,16 @@ class FeedForward(nn.Module):
     def __init__(self, model_dim: int, d_ff: int = 2048, dropout: float = 0.1):
         super().__init__()
 
-        self.fc1: nn.Linear = nn.Linear(model_dim, d_ff)
-        self.dropout: nn.Dropout = nn.Dropout(dropout)
-        self.fc2: nn.Linear = nn.Linear(d_ff, model_dim)
+        if torch.cuda.is_available():
+            dev = "cuda:0"
+        else:
+            dev = "cpu"
+
+        device = torch.device(dev)
+
+        self.fc1: nn.Linear = nn.Linear(model_dim, d_ff).to(device)
+        self.dropout: nn.Dropout = nn.Dropout(dropout).to(device)
+        self.fc2: nn.Linear = nn.Linear(d_ff, model_dim).to(device)
 
     def forward(self, x: Tensor) -> Tensor:
 

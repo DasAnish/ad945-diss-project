@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from math import sqrt
+
 Tensor = torch.Tensor
 from typing import Optional
 
@@ -10,20 +11,27 @@ class MultiHeadAttention(nn.Module):
     def __init__(self, model_dim: int, heads: int, dropout: float = 0.1):
         super().__init__()
 
+        if torch.cuda.is_available():
+            dev = "cuda:0"
+        else:
+            dev = "cpu"
+
+        device = torch.device(dev)
+
         self.model_dim: int = model_dim
         self.heads: int = heads
         self.d_k: int = model_dim // heads
-        self.dropout: nn.Dropout = nn.Dropout(dropout)
+        self.dropout: nn.Dropout = nn.Dropout(dropout).to(device)
 
-        self.w_key: nn.Linear = nn.Linear(model_dim, model_dim)
-        self.w_query: nn.Linear = nn.Linear(model_dim, model_dim)
-        self.w_value: nn.Linear = nn.Linear(model_dim, model_dim)
+        self.w_key: nn.Linear = nn.Linear(model_dim, model_dim).to(device)
+        self.w_query: nn.Linear = nn.Linear(model_dim, model_dim).to(device)
+        self.w_value: nn.Linear = nn.Linear(model_dim, model_dim).to(device)
 
-        self.final_layer: nn.Linear = nn.Linear(model_dim, model_dim)
+        self.final_layer: nn.Linear = nn.Linear(model_dim, model_dim).to(device)
 
     def forward(self, x: Tensor,
                 mask: Optional[Tensor] = None,
-                encoder_output: Optional[Tensor]=None):
+                encoder_output: Optional[Tensor] = None):
 
         # X has the shape batch_size, seq_len, model_dim
 
@@ -48,7 +56,10 @@ class MultiHeadAttention(nn.Module):
 
         if mask is not None:
             mask = mask.unsqueeze(1)
-            mask = mask.unsqueeze(3)
+            # print(mask.dim(), mask.shape, interim_result.shape)
+            if mask.dim() == 3:
+
+                mask = mask.unsqueeze(3)
             interim_result = interim_result.masked_fill(mask == 0, -1e9)
 
         interim_result = F.softmax(interim_result, dim=-1)
