@@ -14,6 +14,13 @@ class TransformerEncoderLayer(nn.Module):
                  dropout: Optional[float] = 0.1, norm_before: bool = False):
         super().__init__()
 
+        if torch.cuda.is_available():
+            dev = "cuda:0"
+        else:
+            dev = "cpu"
+
+        device = torch.device(dev)
+
         self.model_dim: int = model_dim
         self.heads: int = heads
         self.dropout: float = dropout
@@ -21,15 +28,15 @@ class TransformerEncoderLayer(nn.Module):
 
         self.self_attn: MultiHeadAttention = MultiHeadAttention(model_dim,
                                                                 heads,
-                                                                dropout)
+                                                                dropout).to(device)
 
-        self.attn_dropout: nn.Dropout = nn.Dropout(dropout)
-        self.ffn_dropout: nn.Dropout = nn.Dropout(dropout)
+        self.attn_dropout: nn.Dropout = nn.Dropout(dropout).to(device)
+        self.ffn_dropout: nn.Dropout = nn.Dropout(dropout).to(device)
 
-        self.ffn: FeedForward = FeedForward(model_dim, d_ff, dropout)
+        self.ffn: FeedForward = FeedForward(model_dim, d_ff, dropout).to(device)
 
-        self.attn_norm: Norm = Norm(model_dim)
-        self.ffn_norm: Norm = Norm(model_dim)
+        self.attn_norm: Norm = Norm(model_dim).to(device)
+        self.ffn_norm: Norm = Norm(model_dim).to(device)
 
     def forward(self, x: Tensor, mask: Tensor = None) -> Tensor:
         y = x
@@ -59,19 +66,26 @@ class TransformerEncoder(nn.Module):
                  dropout: Optional[float] = 0.1, norm_before: bool = False):
         super().__init__()
 
+        if torch.cuda.is_available():
+            dev = "cuda:0"
+        else:
+            dev = "cpu"
+
+        device = torch.device(dev)
+
         self.model_dim: int = model_dim
         self.heads: int = heads
         self.num_blocks: int = num_blocks
         self.vocab_size: int = vocab_size
         self.max_seq_len: int = max_seq_len
 
-        self.word_embeddings: nn.Embedding = nn.Embedding(vocab_size, model_dim)
-        self.positional_encoding: PositionalEncoding = PositionalEncoding(model_dim, max_seq_len)
+        self.word_embeddings: nn.Embedding = nn.Embedding(vocab_size, model_dim).to(device)
+        self.positional_encoding: PositionalEncoding = PositionalEncoding(model_dim, max_seq_len).to(device)
 
         encoding_layer: TransformerEncoderLayer = TransformerEncoderLayer(model_dim,
                                                                           heads, d_ff,
                                                                           dropout=dropout,
-                                                                          norm_before=norm_before)
+                                                                          norm_before=norm_before).to(device)
         self.encoding_layers: List[TransformerEncoderLayer] = [copy.deepcopy(encoding_layer)
                                                                for _ in range(num_blocks)]
 
@@ -90,23 +104,30 @@ class TransformerDecoderLayer(nn.Module):
                  dropout: Optional[float] = 0.1, norm_before: bool = False):
         super().__init__()
 
+        if torch.cuda.is_available():
+            dev = "cuda:0"
+        else:
+            dev = "cpu"
+
+        device = torch.device(dev)
+
         self.model_dim: int = model_dim
         self.heads: int = heads
         self.d_ff: int = d_ff
         self.dropout: float = dropout
         self.norm_before: bool = norm_before
 
-        self.self_attn_norm: Norm = Norm(model_dim)
-        self.enc_dec_norm: Norm = Norm(model_dim)
-        self.ffn_norm: Norm = Norm(model_dim)
+        self.self_attn_norm: Norm = Norm(model_dim).to(device)
+        self.enc_dec_norm: Norm = Norm(model_dim).to(device)
+        self.ffn_norm: Norm = Norm(model_dim).to(device)
 
-        self.self_attn_dropout: nn.Dropout = nn.Dropout(dropout)
-        self.enc_dec_dropout: nn.Dropout = nn.Dropout(dropout)
-        self.ffn_dropout: nn.Dropout = nn.Dropout(dropout)
+        self.self_attn_dropout: nn.Dropout = nn.Dropout(dropout).to(device)
+        self.enc_dec_dropout: nn.Dropout = nn.Dropout(dropout).to(device)
+        self.ffn_dropout: nn.Dropout = nn.Dropout(dropout).to(device)
 
-        self.self_attn: MultiHeadAttention = MultiHeadAttention(model_dim, heads, dropout)
-        self.enc_dec_attn: MultiHeadAttention = MultiHeadAttention(model_dim, heads, dropout)
-        self.ffn: FeedForward = FeedForward(model_dim, d_ff)
+        self.self_attn: MultiHeadAttention = MultiHeadAttention(model_dim, heads, dropout).to(device)
+        self.enc_dec_attn: MultiHeadAttention = MultiHeadAttention(model_dim, heads, dropout).to(device)
+        self.ffn: FeedForward = FeedForward(model_dim, d_ff).to(device)
 
     def forward(self, x: Tensor, encoder_output: Tensor, src_mask: Tensor, trg_mask: Tensor) -> Tensor:
 
@@ -146,6 +167,13 @@ class TransformerDecoder(nn.Module):
                  dropout: Optional[float] = 0.1, norm_before: bool = False):
         super().__init__()
 
+        if torch.cuda.is_available():
+            dev = "cuda:0"
+        else:
+            dev = "cpu"
+
+        device = torch.device(dev)
+
         self.model_dim: int = model_dim
         self.heads: int = heads
         self.num_blocks: int = num_blocks
@@ -154,13 +182,13 @@ class TransformerDecoder(nn.Module):
         self.dropout: float = dropout
         self.norm_before: bool = norm_before
 
-        self.word_embeddings: nn.Embedding = nn.Embedding(vocab_size, model_dim)
-        self.positional_embeddings: PositionalEncoding = PositionalEncoding(model_dim, max_seq_len)
+        self.word_embeddings: nn.Embedding = nn.Embedding(vocab_size, model_dim).to(device)
+        self.positional_embeddings: PositionalEncoding = PositionalEncoding(model_dim, max_seq_len).to(device)
 
         decoding_layer: TransformerDecoderLayer = TransformerDecoderLayer(model_dim,
                                                                           heads, d_ff,
                                                                           dropout=dropout,
-                                                                          norm_before=norm_before)
+                                                                          norm_before=norm_before).to(device)
         self.decoding_layers: List[TransformerDecoderLayer] = [copy.deepcopy(decoding_layer) for _ in range(num_blocks)]
 
     def forward(self, target: Tensor, encoder_output: Tensor, src_mask: Tensor, trg_mask: Tensor) -> Tensor:
@@ -180,18 +208,28 @@ class Transformer(nn.Module):
                  norm_before: bool = False):
         super().__init__()
 
+        if torch.cuda.is_available():
+            dev = "cuda:0"
+        else:
+            dev = "cpu"
+
+        device = torch.device(dev)
+
         self.encoder: TransformerEncoder = TransformerEncoder(model_dim, d_ff, heads, num_blocks,
                                                               src_vocab_size, max_seq_len, dropout,
-                                                              norm_before)
+                                                              norm_before).to(device)
         self.decoder: TransformerDecoder = TransformerDecoder(model_dim, d_ff, heads, num_blocks,
                                                               trg_vocab_size, max_seq_len, dropout,
-                                                              norm_before)
+                                                              norm_before).to(device)
 
-        self.linear: nn.Linear = nn.Linear(model_dim, trg_vocab_size)
+        self.linear: nn.Linear = nn.Linear(model_dim, trg_vocab_size).to(device)
 
     def forward(self, src: Tensor, trg: Tensor, src_mask: Tensor, trg_mask: Tensor):
         enc_output = self.encoder(src, src_mask)
         dec_output = self.decoder(trg, enc_output, src_mask, trg_mask)
         output = self.linear(dec_output)
         return output
+
+    def save_model(self, file_name):
+        torch.save(self.state_dict, file_name)
 
