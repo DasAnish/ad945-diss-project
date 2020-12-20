@@ -82,11 +82,9 @@ class TransformerEncoder(nn.Module):
         self.word_embeddings: nn.Embedding = nn.Embedding(vocab_size, model_dim).to(device)
         self.positional_encoding: PositionalEncoding = PositionalEncoding(model_dim, max_seq_len).to(device)
 
-        encoding_layer: TransformerEncoderLayer = TransformerEncoderLayer(model_dim,
-                                                                          heads, d_ff,
-                                                                          dropout=dropout,
-                                                                          norm_before=norm_before).to(device)
-        self.encoding_layers: List[TransformerEncoderLayer] = [copy.deepcopy(encoding_layer)
+        args = (model_dim, heads, d_ff, dropout, norm_before)
+        # encoding_layer: TransformerEncoderLayer = TransformerEncoderLayer(*args).to(device)
+        self.encoding_layers: List[TransformerEncoderLayer] = [TransformerEncoderLayer(*args).to(device)
                                                                for _ in range(num_blocks)]
 
     def forward(self, _input: Tensor, mask: Tensor):
@@ -185,11 +183,11 @@ class TransformerDecoder(nn.Module):
         self.word_embeddings: nn.Embedding = nn.Embedding(vocab_size, model_dim).to(device)
         self.positional_embeddings: PositionalEncoding = PositionalEncoding(model_dim, max_seq_len).to(device)
 
-        decoding_layer: TransformerDecoderLayer = TransformerDecoderLayer(model_dim,
-                                                                          heads, d_ff,
-                                                                          dropout=dropout,
-                                                                          norm_before=norm_before).to(device)
-        self.decoding_layers: List[TransformerDecoderLayer] = [copy.deepcopy(decoding_layer) for _ in range(num_blocks)]
+        args = (model_dim, heads, d_ff, dropout, norm_before)
+
+        # decoding_layer: TransformerDecoderLayer = TransformerDecoderLayer(*args).to(device)
+        self.decoding_layers: List[TransformerDecoderLayer] = [TransformerDecoderLayer(*args).to(device)
+                                                               for _ in range(num_blocks)]
 
     def forward(self, target: Tensor, encoder_output: Tensor, src_mask: Tensor, trg_mask: Tensor) -> Tensor:
         x: Tensor = self.word_embeddings(target)
@@ -231,5 +229,5 @@ class Transformer(nn.Module):
         return output
 
     def save_model(self, file_name):
-        torch.save(self.state_dict, file_name)
+      torch.save(self.state_dict(), file_name)
 
