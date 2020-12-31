@@ -29,19 +29,26 @@ class TransformerEncoderLayer(nn.Module):
         self.self_attn: MultiHeadAttention = MultiHeadAttention(model_dim,
                                                                 heads,
                                                                 dropout).to(device)
+        self.add_module('self_attn', self.self_attn)
 
         self.attn_dropout: nn.Dropout = nn.Dropout(dropout).to(device)
         self.ffn_dropout: nn.Dropout = nn.Dropout(dropout).to(device)
+        self.add_module('attn_dropout', self.attn_dropout)
+        self.add_module('ffn_dropout', self.ffn_dropout)
 
         self.ffn: FeedForward = FeedForward(model_dim, d_ff, dropout).to(device)
+        self.add_module('ffn', self.ffn)
 
-        self.attn_norm: Norm = Norm(model_dim).to(device)
-        self.ffn_norm: Norm = Norm(model_dim).to(device)
+        self.attn_norm: nn.LayerNorm = nn.LayerNorm(model_dim).to(device)
+        self.ffn_norm: nn.LayerNorm = nn.LayerNorm(model_dim).to(device)
+        self.add_module('attn_norm', self.attn_norm)
+        self.add_module('ffn_norm', self.ffn_norm)
 
     def forward(self, x: Tensor, mask: Tensor = None) -> Tensor:
         y = x
         if self.norm_before:
             y = self.attn_norm(x)
+        # print('encoder_attention')
         y = self.self_attn(y, mask)
         y = self.attn_dropout(y)
         x = x + y
@@ -81,11 +88,14 @@ class TransformerEncoder(nn.Module):
 
         self.word_embeddings: nn.Embedding = nn.Embedding(vocab_size, model_dim).to(device)
         self.positional_encoding: PositionalEncoding = PositionalEncoding(model_dim, max_seq_len).to(device)
+        self.add_module('word_embeddings', self.word_embeddings)
 
         args = (model_dim, heads, d_ff, dropout, norm_before)
         # encoding_layer: TransformerEncoderLayer = TransformerEncoderLayer(*args).to(device)
         self.encoding_layers: List[TransformerEncoderLayer] = [TransformerEncoderLayer(*args).to(device)
                                                                for _ in range(num_blocks)]
+        for i, layer in enumerate(self.encoding_layers):
+            self.add_module(f'layer_{i}', layer)
 
     def forward(self, _input: Tensor, mask: Tensor):
         x = self.word_embeddings(_input)
@@ -115,23 +125,33 @@ class TransformerDecoderLayer(nn.Module):
         self.dropout: float = dropout
         self.norm_before: bool = norm_before
 
-        self.self_attn_norm: Norm = Norm(model_dim).to(device)
-        self.enc_dec_norm: Norm = Norm(model_dim).to(device)
-        self.ffn_norm: Norm = Norm(model_dim).to(device)
+        self.self_attn_norm: nn.LayerNorm = nn.LayerNorm(model_dim).to(device)
+        self.enc_dec_norm: nn.LayerNorm = nn.LayerNorm(model_dim).to(device)
+        self.ffn_norm: nn.LayerNorm = nn.LayerNorm(model_dim).to(device)
+        self.add_module('self_attn_norm', self.self_attn_norm)
+        self.add_module('enc_dec_norm', self.enc_dec_norm)
+        self.add_module('ffn_norm', self.ffn_norm)
 
         self.self_attn_dropout: nn.Dropout = nn.Dropout(dropout).to(device)
         self.enc_dec_dropout: nn.Dropout = nn.Dropout(dropout).to(device)
         self.ffn_dropout: nn.Dropout = nn.Dropout(dropout).to(device)
+        self.add_module('self_attn_dropout', self.self_attn_dropout)
+        self.add_module('enc_dec_dropout', self.self_attn_dropout)
+        self.add_module('ffn_dropout', self.ffn_dropout)
 
         self.self_attn: MultiHeadAttention = MultiHeadAttention(model_dim, heads, dropout).to(device)
         self.enc_dec_attn: MultiHeadAttention = MultiHeadAttention(model_dim, heads, dropout).to(device)
         self.ffn: FeedForward = FeedForward(model_dim, d_ff).to(device)
+        self.add_module('self_attn', self.self_attn)
+        self.add_module('enc_dec_attn', self.enc_dec_attn)
+        self.add_module('ffn', self.ffn)
 
     def forward(self, x: Tensor, encoder_output: Tensor, src_mask: Tensor, trg_mask: Tensor) -> Tensor:
 
         y = x
         if self.norm_before:
             y = self.self_attn_norm(x)
+        # print('decoder_attention')
         y = self.self_attn(y, trg_mask)
         y = self.self_attn_dropout(y)
         x = x + y
@@ -141,6 +161,7 @@ class TransformerDecoderLayer(nn.Module):
         y = x
         if self.norm_before:
             y = self.enc_dec_norm(x)
+        # print('enc_dec_attn')
         y = self.enc_dec_attn(y, src_mask, encoder_output)
         y = self.enc_dec_dropout(y)
         x = x + y
@@ -188,6 +209,8 @@ class TransformerDecoder(nn.Module):
         # decoding_layer: TransformerDecoderLayer = TransformerDecoderLayer(*args).to(device)
         self.decoding_layers: List[TransformerDecoderLayer] = [TransformerDecoderLayer(*args).to(device)
                                                                for _ in range(num_blocks)]
+        for i, layer in enumerate(self.decoding_layers):
+            self.add_module(f'layer_{i}', layer)
 
     def forward(self, target: Tensor, encoder_output: Tensor, src_mask: Tensor, trg_mask: Tensor) -> Tensor:
         x: Tensor = self.word_embeddings(target)
@@ -222,10 +245,16 @@ class Transformer(nn.Module):
 
         self.linear: nn.Linear = nn.Linear(model_dim, trg_vocab_size).to(device)
 
+        self.add_module('encoder', self.encoder)
+        self.add_module('decoder', self.decoder)
+        self.add_module('linear', self.linear)
+
     def forward(self, src: Tensor, trg: Tensor, src_mask: Tensor, trg_mask: Tensor):
         enc_output = self.encoder(src, src_mask)
         dec_output = self.decoder(trg, enc_output, src_mask, trg_mask)
         output = self.linear(dec_output)
+        del enc_output, dec_output
+        torch.cuda.empty_cache()
         return output
 
     def save_model(self, file_name):

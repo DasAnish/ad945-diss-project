@@ -36,10 +36,10 @@ class PositionalEncoding(nn.Module):
         arange = torch.arange(max_length)
 
         # note to self: this appear to work right now.
-        for i in range(0, model_dim, 2):
+        for i in range(model_dim//2):
             # Follwing the formula provided in the paper.
-            position_vector[:, i] = torch.sin(arange / (10000 ** ((2*i) / model_dim)))
-            position_vector[:, i+1] = torch.cos(arange / (10000 ** ((2*i+1) / model_dim)))
+            position_vector[:, 2*i] = torch.sin(arange / (10000 ** (2*i / model_dim)))
+            position_vector[:, 2*i+1] = torch.cos(arange / (10000 ** (2*i / model_dim)))
 
         position_vector.unsqueeze(0)
         self.register_buffer('position_vector', position_vector)
@@ -56,39 +56,6 @@ class PositionalEncoding(nn.Module):
 
         x = x + Variable(self.position_vector[:sequence_length, :], requires_grad=False).expand_as(x)
         return x
-
-
-class Norm(nn.Module):
-
-    """The utility module to normalize the outputs."""
-
-    def __init__(self, model_dim: int, eps: float = 1e-5):
-        super().__init__()
-
-        if torch.cuda.is_available():
-            dev = "cuda:0"
-        else:
-            dev = "cpu"
-
-        device = torch.device(dev)
-
-        self.model_dim = model_dim
-        self.eps = eps
-
-        # two learnable parameters to get better normalizations
-        self.alpha: Tensor = nn.Parameter(torch.ones(self.model_dim)).to(device)
-        self.bias: Tensor = nn.Parameter(torch.zeros(self.model_dim)).to(device)
-
-    def forward(self, x: Tensor) -> Tensor:
-        """
-        The forward pass algorithm to nomralize the input. Uses two torch.Parameters which are learnt over time.
-        Those are: alpha (initially 1s) and bias (initially 0s).
-        :param x: The tensor we want to normalize w.r.t. dim=-1
-        :return: The normalized output alpha * (x - mean(x)) / (std(x)+eps) + bias
-        """
-        norm = self.alpha * (x - x.mean(dim=-1, keepdim=True)) / (x.std(dim=-1, keepdim=True) + self.eps) + self.bias
-
-        return norm
 
 
 class FeedForward(nn.Module):
@@ -110,6 +77,10 @@ class FeedForward(nn.Module):
         self.dropout: nn.Dropout = nn.Dropout(dropout).to(device)
         self.fc2: nn.Linear = nn.Linear(d_ff, model_dim).to(device)
 
+        self.add_module('fc1', self.fc1)
+        self.add_module('dropout', self.dropout)
+        self.add_module('fc2', self.fc2)
+
     def forward(self, x: Tensor) -> Tensor:
 
         """
@@ -127,11 +98,10 @@ class FeedForward(nn.Module):
 class Log:
     LOG, ERROR = 0, 1
 
-    def __init__(self, filename=None):
-        if filename is None:
-            filename = '.log'
+    def __init__(self, outfile='data/.log', filename='data/logfile.log'):
         self.filename = filename
-        self.file_object = open(filename, 'a', encoding='utf-8')
+        self.outfile = outfile
+        self.file_object = open(filename, 'a+', encoding='utf-8')
         self.line_num = 0
         from datetime import datetime
         print("LOGGING For seesion on: " + str(datetime.now()), file=self.file_object)
@@ -144,7 +114,19 @@ class Log:
         self.line_num += 1
 
     def close(self):
+        self.file_object.seek(0, 0)
+        text = self.file_object.read()
+        text = text.split('\n')
+        text.reverse()
+        output = '\n'.join(text)
         self.file_object.close()
+
+        with open(self.outfile, 'w') as f:
+            f.write(output)
+
+    def flush(self):
+        self.file_object.close()
+        self.file_object = open(self.filename, 'a+', encoding = 'utf-8')
 
 
 
