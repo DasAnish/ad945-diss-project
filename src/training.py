@@ -18,33 +18,36 @@ log = Log()
 input_file = 'data/News-Commentary.de-en.'
 model_file = 'data/SPM.de-en.'
 
-vocab_size = 8000
+vocab_size = 10000
 
 # making the vocab file if it hasn't been made
 if not os.path.exists(f"{model_file}de.model") or not os.path.exists(f"{model_file}en.model"):
     for l in ['de', 'en']:
         spm.SentencePieceTrainer.Train(
-                                   input=f"{input_file}{l}",
-                                   model_prefix=f"{model_file}{l}",
-                                   model_type='bpe',
-                                   user_defined_symbols=['<pad>', '<s>', '</s>'],
-                                   vocab_size=vocab_size
-                                   )
+            input=f"{input_file}{l}",
+            model_prefix=f"{model_file}{l}",
+            model_type='bpe',
+            vocab_size=vocab_size,
+            pad_id=3,
+            pad_piece='<p>',
+            bos_piece='<s>',
+            eos_piece='</s>'
+            )
 
 # Initializing the sentencepiece encoders
 encoder_de = spm.SentencePieceProcessor()
-encoder_de.Init(model_file=f'{model_file}de.model')
+encoder_de.load(model_file=f'{model_file}de.model')
 encoder_en = spm.SentencePieceProcessor()
-encoder_en.Init(model_file=f'{model_file}en.model')
+encoder_en.load(model_file=f'{model_file}en.model')
 
-src_pad = encoder_de.piece_to_id('<pad>')
-trg_pad = encoder_en.piece_to_id('<pad>')
+src_pad = encoder_de.pad_id()
+trg_pad = encoder_en.pad_id()
 
-src_start = encoder_de.piece_to_id('<s>')
-trg_start = encoder_en.piece_to_id('<s>')
+src_start = encoder_de.bos_id()
+trg_start = encoder_en.bos_id()
 
-trg_end = encoder_en.piece_to_id('</s>')
-src_end = encoder_en.piece_to_id('</s>')
+src_end = encoder_de.eos_id()
+trg_end = encoder_en.eos_id()
 
 tokenized_split_data_file = 'data/tokenized_split_data'
 
@@ -63,31 +66,29 @@ else:
     with open(f'{input_file}en', encoding='utf-8') as f:
         pairs_en = f.read()
 
-    _src_list = encoder_de.encode(
-        pairs_de.split('\n')
-    )
-    _trg_list = encoder_en.encode(
-        pairs_en.split('\n')
-    )
+    _src_list = pairs_de.split("\n")
+    _trg_list = pairs_en.split('\n')
+
+    _src_list = [[src_start] + encoder_de.encode(s) + [src_end]
+                 for s in _src_list]
+    _trg_list = [[trg_start] + encoder_en.encode(s) + [trg_end]
+                 for s in _trg_list]
 
     log.print('Tokenized')
-
-    src_list = []
-    trg_list = []
 
     train_src_bins = {30: [], 40: [], 50: [], 60: [], 75: []}
     train_trg_bins = {30: [], 40: [], 50: [], 60: [], 75: []}
 
     for src, trg in zip(_src_list, _trg_list):
 
-        if len(src) > max_len - 2 or len(trg) > max_len - 2:
+        # filtering out the long sentences
+        if len(src) > max_len or len(trg) > max_len:
             continue
 
-        src = [src_start] + src + [src_end]
-        trg = [trg_start] + trg + [trg_end]
         lsrc = len(src)
         ltrg = len(trg)
 
+        # sorting the sentences according to size
         for v in [30, 40, 50, 60, 75]:
             if lsrc <= v and ltrg <= v:
                 for _ in range(lsrc, v):
@@ -101,8 +102,7 @@ else:
 
     log.print("Filtered long sentences")
 
-# print({v: len(train_src_bins[v]) for v in train_src_bins})
-# print({v: len(train_trg_bins[v]) for v in train_trg_bins})
+log.print({v: len(train_src_bins[v]) for v in train_src_bins})
 
 
 # Function to save the model and optimizer
@@ -193,6 +193,7 @@ if not os.path.exists(path):
     for p in model.parameters():
         if p.dim() > 1:
             nn.init.xavier_uniform_(p)
+    optim = torch.optim.Adam(model.parameters(), lr=0.0001, betas=(0.9, 0.98), eps=1e-9)
     log.print(f"No {path} found. Created a new path directory and started using xavier_uniform")
 else:
     for i in os.walk(path):
@@ -210,7 +211,7 @@ else:
         log.print(f"Starting from last saved {mf}")
         model.load_state_dict(torch.load(f"{path}/{mf}"))
         optim = torch.optim.Adam(model.parameters(), lr=0.0001, betas=(0.9, 0.98), eps=1e-9)
-        optim.load_state_dict(torch.load(f"{optim_file}"))
+        optim.load_state_dict(torch.load(optim_file))
         starting_index = m
     else:
         log.print(f"Starting from xavier_uniform distribution")
