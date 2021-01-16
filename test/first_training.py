@@ -31,8 +31,8 @@ trg_pad = trg_vocab-1
 log = Log()#file_name)
 
 model = Transformer(src_vocab, trg_vocab, model_dim, model_dim*4, heads, N)
-print(model.state_dict().keys())
-raise Exception
+# print(model.state_dict().keys())
+# raise Exception
 
 for p in model.parameters():
     if p.dim() > 1:
@@ -121,16 +121,17 @@ def train_test_split(src_list, trg_list):
     return src_np[:l], trg_np[:l], src_np[l:], trg_np[l:]
 
 
-def batch(size, src_list, trg_list):
+def batch(size, src_list, trg_list, shuffle=True):
     print(size)
     src_np = np.array(src_list)
     trg_np = np.array(trg_list)
     indexes = np.arange(len(src_np))
     # indexes = np.roll(indexes, 1800+500)
     while True:
-        np.random.shuffle(indexes)
-        src_np = src_np[indexes]
-        trg_np = trg_np[indexes]
+        if shuffle:
+            np.random.shuffle(indexes)
+            src_np = src_np[indexes]
+            trg_np = trg_np[indexes]
 
         for i in range(0, len(src_np), size):
             temp_src = src_np[i:i+size]
@@ -158,26 +159,29 @@ else:
 device = torch.device(dev)
 k = 10
 model_prefix = 'de-en-model-'
+path='models'
+starting_index = 0
 
 
-def train_model(batch_size, epochs, print_every=k, save_every=3 * k):
-    path = 'models'
-    if not os.path.exists(path):
-        os.mkdir(path)
-
+def train_model(batch_size, epochs, print_every=k, save_every=5 * k, eval_every=10 * k):
     model.train()
 
     start = time.time()
     temp = start
     total_loss = 0
+    total_loss_at_save = 0
+    last_loss = -1
+    r = save_every / print_every
 
-    batches = batch(batch_size, train_src_list, train_trg_list)
+    batches = batch(batch_size, train_src_list, train_trg_list, shuffle=False)
+
+    no_peak_mask = np.triu(np.ones((max_len - 1, max_len - 1)), k=1).astype(np.uint8)
+    no_peak_mask = (no_peak_mask == 0) * 1
+    # _src_list, _trg_list = next(batches)
+
+    # batches = batch(batch_size, _src_list, _trg_list)
 
     for epoch, (src_lis, trg_lis) in enumerate(batches):
-        m = 10
-        src_lis = src_lis[:, :m]
-        trg_lis = trg_lis[:, :m]
-
         if epoch > epochs: break
 
         optim.zero_grad()
@@ -187,14 +191,9 @@ def train_model(batch_size, epochs, print_every=k, save_every=3 * k):
         src_tensor.requires_grad = False
 
         trg_np = np.array(trg_lis)
-        # trg_prediction = np.array([[trg_pad] for _ in range(batch_size)])
-
-        no_peak_mask = np.triu(np.ones((1, m-1, m-1)), k=1).astype(np.uint8)
-        no_peak_mask = (no_peak_mask == 0)*1
 
         trg_mask = torch.tensor(trg_np[:, :-1] != trg_pad).unsqueeze(1)
-
-        trg_mask = trg_mask & no_peak_mask
+        trg_mask = (trg_mask & no_peak_mask).to(device)
 
         trg_tensor = torch.LongTensor(trg_np[:, :-1]).to(device)
         target = torch.LongTensor(trg_np[:, 1:]).to(device).contiguous().view(-1)
@@ -210,11 +209,11 @@ def train_model(batch_size, epochs, print_every=k, save_every=3 * k):
         del src_mask, src_tensor, trg_mask, trg_tensor, preds, loss
         torch.cuda.empty_cache()
 
-        if True:  # (epoch + 1) % print_every == 0:
+        if (epoch + 1) % print_every == 0:
             avg = "%.3f" % (total_loss)
             t = "%.3f" % (time.time() - temp)
             tt = time.strftime('%H:%M:%S', time.gmtime(time.time() - start))
-            print(f"time: {t}s, total: {tt}, cat_loss = {avg}, epoch = {epoch}")
+            print(f"time: {t}s, total: {tt}, cat_loss = {avg}, epoch = {epoch + 1}")
             total_loss_at_save += total_loss
             total_loss = 0
             temp = time.time()
@@ -222,10 +221,14 @@ def train_model(batch_size, epochs, print_every=k, save_every=3 * k):
         if (epoch + 1) % save_every == 0:
             model_name = f'{path}/{model_prefix}{starting_index + epoch + 1}'
             # model.save_model(model_name)
-            save(model, model_name, optim, optim_file)
-            avg = '%.3f' % (total_loss_at_save / save_every)
+            # save(model, model_name, optim, optim_file)
+            avg = (total_loss_at_save / save_every)
             total_loss_at_save = 0
-            log.print(f"***Saving model: {model_name} | avg_loss: {avg}***")
+            diff = avg - last_loss
+            avg = '%.3f' % avg
+            diff = '%.3f' % diff
+            last_loss = avg
+            log.print(f"****Saving model: {model_name} | avg_loss: {avg} | diff: {diff}****")
 
         if (epoch + 1) % eval_every == 0:
             eval(src_list=src_lis, trg_list=trg_lis)
@@ -234,11 +237,59 @@ def train_model(batch_size, epochs, print_every=k, save_every=3 * k):
         log.flush()
 
 
-try:
-    train_model(2, 1000)
-except Exception as e:
-    log.print(e, type=Log.ERROR)
-    raise e
+# try:
+#     train_model(2, 1000)
+# except Exception as e:
+#     log.print(e, type=Log.ERROR)
+#     raise e
+#
+# log.close()
 
-log.close()
+def eval(batch_size=5, model_file=None, src_list=test_src_list, trg_list=test_trg_list):
+    if model_file is not None:
+        model.load_state_dict(torch.load(model_file))
+    model.eval()
+    model.to(device)
 
+    # batch_size = 5
+
+    batches = batch(batch_size, src_list, trg_list, shuffle=False)
+
+    src_lis, trg_lis = next(batches)
+
+    trg_np = np.array(trg_lis)
+    src_np = np.array(src_lis)
+
+    src_mask = torch.tensor(np.array(src_lis) != src_pad).to(device).unsqueeze(1)
+
+    src_tensor = torch.LongTensor(src_lis).to(device)
+
+    trg_tensor = torch.LongTensor([[trg_start]
+                                   for j in range(batch_size)])
+    trg_tensor = trg_tensor.to(device)
+    trg = np.array([[trg_start] for _ in range(batch_size)])
+    trg_pads = np.array([[trg_pad] for _ in range(batch_size)])
+
+    enc_output = model.encoder(src_tensor, src_mask)
+
+    for i in range(1, max_len):
+        trg_tensor = torch.LongTensor(np.concatenate([trg, trg_pads], axis=1)).to(device)
+        trg_mask = ((trg_tensor != trg_pad) * 1).unsqueeze(1)
+
+        dec_output = model.decoder(trg_tensor, enc_output, src_mask, trg_mask)
+        preds = model.linear(dec_output)
+        preds = F.softmax(preds)
+
+        output = torch.argmax(preds[:, i], dim=1).unsqueeze(1).tolist()
+        output = np.array(output)
+        trg = np.concatenate([trg, output], axis=1)
+
+        del trg_mask, dec_output, preds, output, trg_tensor
+        torch.cuda.empty_cache()
+    print("This output is not SAVED")
+    for i in range(batch_size):
+        print("TRG:", ''.join(encoder_en.decode(trg_lis[i].tolist())).replace('_', ' '))
+        print("OUT:", ''.join(encoder_en.decode(trg[i].tolist())).replace('_', ' '))
+
+
+eval()

@@ -6,19 +6,9 @@ from torch.autograd import Variable
 from math import sqrt
 
 
-# class WordEmbeddings(nn.Module):
-#
-#     def __init__(self, size_of_vocab: int, model_dim: int):
-#         super().__init__()
-#         self.embedder: nn.Embedding = nn.Embedding(size_of_vocab, model_dim)
-#
-#     def forward(self, x: Tensor) -> Tensor:
-#         return self.embedder(x)
-
-
 class PositionalEncoding(nn.Module):
 
-    '''A parameter less module that concatenates a number of sine signals at the end of the embedded vectors.'''
+    """A parameter less module that concatenates a number of sine signals at the end of the embedded vectors."""
 
     def __init__(self, model_dim: int, max_length: int):
         super().__init__()
@@ -41,7 +31,7 @@ class PositionalEncoding(nn.Module):
             position_vector[:, 2*i] = torch.sin(arange / (10000 ** (2*i / model_dim)))
             position_vector[:, 2*i+1] = torch.cos(arange / (10000 ** (2*i / model_dim)))
 
-        position_vector.unsqueeze(0)
+        position_vector = position_vector.unsqueeze(0)
         self.register_buffer('position_vector', position_vector)
 
     def forward(self, x: Tensor) -> Tensor:
@@ -53,8 +43,7 @@ class PositionalEncoding(nn.Module):
 
         x = x * sqrt(self.model_dim)
         sequence_length = x.size(1)
-
-        x = x + Variable(self.position_vector[:sequence_length, :], requires_grad=False).expand_as(x)
+        x = x + Variable(self.position_vector[:, :sequence_length], requires_grad=False)
         return x
 
 
