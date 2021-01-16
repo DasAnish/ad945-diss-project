@@ -3,8 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 Tensor = torch.Tensor
 
-from src.TransformerLayers import Transformer
-from src.utils import Log
+from TransformerLayers import Transformer
+from utils import Log
 
 import pickle
 import numpy as np
@@ -55,6 +55,7 @@ max_len = 75
 
 # loading the tokenized bins
 if os.path.exists(tokenized_split_data_file):
+    log.print('loading from tokenized bins file')
     with open(tokenized_split_data_file, 'rb') as f:
         train_src_bins = pickle.load(f)
         train_trg_bins = pickle.load(f)
@@ -353,12 +354,12 @@ def train_model(batch_size, epochs, print_every, save_every, eval_every):
 
         log.flush()
 
-
+print("*******************HERE********************")
 if __name__ == '__main__':
     try:
         log.print("Starting the training")
         bs = 200 * 75
-        train_model(bs, 200000, eval_every=1000, save_every=1000, print_every=50)
+        train_model(bs, 200000, eval_every=1000, save_every=1000, print_every=1)
 
     except Exception as e:
         log.print(e, type=Log.ERROR)

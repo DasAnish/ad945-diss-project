@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from src.MultiHeadAttention import MultiHeadAttention
-from src.utils import *
+from MultiHeadAttention import MultiHeadAttention
+from utils import *
 from typing import List, Optional
 import copy
 
