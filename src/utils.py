@@ -84,6 +84,9 @@ class FeedForward(nn.Module):
         return x
 
 
+from datetime import datetime
+
+
 class Log:
     LOG, ERROR = 0, 1
 
@@ -92,15 +95,13 @@ class Log:
         self.outfile = outfile
         self.file_object = open(filename, 'a+', encoding='utf-8')
         self.line_num = 0
-        from datetime import datetime
         print("LOGGING For seesion on: " + str(datetime.now()), file=self.file_object)
 
     def print(self, txt, type=LOG):
         print(txt)
-        prefix = "LOG-" if type==Log.LOG else "ERROR-"
-        txt = f"{prefix}{self.line_num}: {txt}"
+        prefix = "LOG ::" if type==Log.LOG else "ERROR ::"
+        txt = f"{prefix} {str(datetime.now())} :: {txt}"
         print(txt, file=self.file_object)
-        self.line_num += 1
 
     def close(self):
         self.file_object.seek(0, 0)

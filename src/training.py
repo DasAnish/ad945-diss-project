@@ -33,7 +33,7 @@ if not os.path.exists(f"{model_file}de.model") or not os.path.exists(f"{model_fi
             bos_piece='<s>',
             eos_piece='</s>'
             )
-
+raise Exception
 # Initializing the sentencepiece encoders
 encoder_de = spm.SentencePieceProcessor()
 encoder_de.load(model_file=f'{model_file}de.model')
@@ -313,7 +313,7 @@ def train_model(batch_size, epochs, print_every, save_every, eval_every):
         preds = model(src_tensor, trg_tensor, src_mask, trg_mask)
         preds = preds.view(-1, preds.size(-1))
 
-        loss = F.cross_entropy(preds, target, ignore_index=trg_pad)
+        loss = F.cross_entropy(preds, target, ignore_index=trg_pad, reduction='sum')
 
         loss.backward()
 
@@ -359,7 +359,7 @@ if __name__ == '__main__':
     try:
         log.print("Starting the training")
         bs = 200 * 75
-        train_model(bs, 200000, eval_every=1000, save_every=1000, print_every=1)
+        train_model(bs, 200000, eval_every=3000, save_every=3000, print_every=300)
 
     except Exception as e:
         log.print(e, type=Log.ERROR)
