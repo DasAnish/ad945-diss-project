@@ -6,6 +6,8 @@ Tensor = torch.Tensor
 from TransformerLayers import Transformer
 from utils import Log
 
+import sacrebleu
+
 import pickle
 import numpy as np
 import time
@@ -33,7 +35,7 @@ if not os.path.exists(f"{model_file}de.model") or not os.path.exists(f"{model_fi
             bos_piece='<s>',
             eos_piece='</s>'
             )
-raise Exception
+# raise Exception
 # Initializing the sentencepiece encoders
 encoder_de = spm.SentencePieceProcessor()
 encoder_de.load(model_file=f'{model_file}de.model')
@@ -210,9 +212,8 @@ else:
 
     if mf is not None:
         log.print(f"Starting from last saved {mf}")
-        model.load_state_dict(torch.load(f"{path}/{mf}"))
+        model.load_state_dict(torch.load(f"{path}/{mf}", map_location=device))
         optim = torch.optim.Adam(model.parameters(), lr=0.0001, betas=(0.9, 0.98), eps=1e-9)
-        optim.load_state_dict(torch.load(optim_file))
         starting_index = m
     else:
         log.print(f"Starting from xavier_uniform distribution")
@@ -229,9 +230,11 @@ def eval(batch_size=5, model_file=None, src_list=train_src_bins[30], trg_list=tr
     batches = batch(batch_size, src_list, trg_list, shuffle=False)
 
     src_lis_, trg_lis_ = next(batches)
-
+    trg_sentences = []
+    out_sentences = []
+    blue_score = 0
     for i, (src_lis, trg_lis) in enumerate(batch(1, src_lis_, trg_lis_, shuffle=False)):
-        if i > batch_size: break
+        if i >= batch_size: break
 
         src_mask = torch.tensor(np.array(src_lis) != src_pad).to(device).unsqueeze(1)
 
@@ -266,11 +269,17 @@ def eval(batch_size=5, model_file=None, src_list=train_src_bins[30], trg_list=tr
 
         for i in range(1):
 
-            print("TRG:" + ''.join(encoder_en.decode(trg_lis[i].tolist())).replace('_', ' '))
-            print("OUT:" + ''.join(encoder_en.decode(trg[i].tolist())).replace('_', ' '))
+            trg_sentence = ''.join(encoder_en.decode(trg_lis[i].tolist())).replace('_', ' ')
+            out_sentence = ''.join(encoder_en.decode(trg[i].tolist())).replace('_', ' ')
+
+            trg_sentences.append(trg_sentence)
+            out_sentences.append(out_sentence)
 
         del src_mask, src_tensor
         torch.cuda.empty_cache()
+
+    blue_score = sacrebleu.corpus_bleu(out_sentences, [trg_sentences])
+    print(blue_score)
 
 
 model_prefix = 'de-en-model-'
@@ -354,9 +363,10 @@ def train_model(batch_size, epochs, print_every, save_every, eval_every):
 
         log.flush()
 
-print("*******************HERE********************")
+# print("*******************HERE********************")
 if __name__ == '__main__':
     try:
+        eval()
         log.print("Starting the training")
         bs = 200 * 75
         train_model(bs, 200000, eval_every=3000, save_every=3000, print_every=300)
