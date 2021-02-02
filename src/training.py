@@ -244,15 +244,15 @@ def eval(token_size=1500, model_file=None, src_bins=dev_src_bins, trg_bins=dev_t
     out_sentences = []
 
     for i, (src_list, trg_list, ml) in enumerate(batches):
-        print(ml, end=",")
+        # print(ml, end=",")
         # if (i + 1) % 20 == 0: print()
-        # batch_size = len(src_list)
+        batch_size = len(src_list)
 
         src_mask = torch.tensor(np.array(src_list) != src_pad).to(device).unsqueeze(1)
         src_tensor = torch.LongTensor(src_list).to(device)
 
-        trg = np.array([[trg_start] for _ in range(token_size)])
-        trg_pads = np.array([[trg_pad] for _ in range(token_size)])
+        trg = np.array([[trg_start] for _ in range(batch_size)])
+        trg_pads = np.array([[trg_pad] for _ in range(batch_size)])
 
         enc_output = eval_model.encoder(src_tensor, src_mask)
 
@@ -260,6 +260,7 @@ def eval(token_size=1500, model_file=None, src_bins=dev_src_bins, trg_bins=dev_t
             trg_tensor = torch.LongTensor(np.concatenate([trg, trg_pads], axis=1)).to(device)
             trg_mask = ((trg_tensor != trg_pad) * 1).unsqueeze(1)
 
+            # print(trg_tensor.shape, enc_output.shape, src_mask.shape, trg_mask.shape)
             dec_output = eval_model.decoder(trg_tensor, enc_output, src_mask, trg_mask)
             preds = eval_model.linear(dec_output)
 
@@ -274,7 +275,7 @@ def eval(token_size=1500, model_file=None, src_bins=dev_src_bins, trg_bins=dev_t
         del src_mask, src_tensor, enc_output
         torch.cuda.empty_cache()
 
-        for i in range(token_size):
+        for i in range(batch_size):
             trg_sentence = ''.join(encoder_en.decode(trg_list[i].tolist())).replace('_', ' ')
             out_sentence = ''.join(encoder_en.decode(trg[i].tolist())).replace('_', ' ')
 
@@ -332,7 +333,7 @@ def train_model(batch_size, epochs, print_every, save_every, epsilon=0.1, warmup
         total_loss += loss.item()
 
         optim.step()
-        step = starting_index + epoch
+        step = starting_index + epoch + 1
         optim.param_groups[0]['lr'] = (model_dim ** (-0.5)) * min(step ** (-0.5), step * (warmup_steps ** (-1.5)))
 
         del src_mask, src_tensor, trg_mask, trg_tensor, preds, loss
