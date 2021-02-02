@@ -34,23 +34,19 @@ class MultiHeadAttention(nn.Module):
         self.final_layer: nn.Linear = nn.Linear(model_dim, model_dim).to(device)
         self.add_module('final_layer', self.final_layer)
 
-    def forward(self, x: Tensor,
-                mask: Optional[Tensor] = None,
-                encoder_output: Optional[Tensor] = None):
+    def forward(self,
+                q: Tensor,
+                k: Tensor,
+                v: Tensor,
+                mask: Optional[Tensor] = None):
 
         # if encoder_output is not None: print("enc_output == True")
         # print(f'x.shape: {x.shape}')
 
-        batch_size = x.size(0)
-        queries = self.w_query(x).view(batch_size, -1, self.heads, self.d_k)
-
-        if encoder_output is None:
-            keys = self.w_key(x).view(batch_size, -1, self.heads, self.d_k)
-            values = self.w_value(x).view(batch_size, -1, self.heads, self.d_k)
-        else:
-            keys = self.w_key(encoder_output).view(batch_size, -1, self.heads, self.d_k)
-            values = self.w_value(encoder_output).view(batch_size, -1, self.heads, self.d_k)
-        # print(f'keys.shape: {keys.shape}, \nqueries.shape: {queries.shape}, \nvalues.shape: {values.shape}')
+        batch_size = q.size(0)
+        queries = self.w_query(q).view(batch_size, -1, self.heads, self.d_k)
+        keys = self.w_key(k).view(batch_size, -1, self.heads, self.d_k)
+        values = self.w_value(v).view(batch_size, -1, self.heads, self.d_k)
 
         # we have batch_size, seq_len, heads, d_k tensor
 
@@ -58,25 +54,11 @@ class MultiHeadAttention(nn.Module):
         queries.transpose_(1, 2)
         values.transpose_(1, 2)
 
-        # after transposing we have batch_size, heads, seq_len, d_k tensor
-        # if encoder_output is not None: print(queries, keys.transpose(-2, -1).shape)
-
-        # print(f'queries.shape: {queries.shape}, \nkeys.shape: {keys.shape}, \nvalues.shape: {values.shape}')
-
         interim_result = torch.matmul(queries, keys.transpose(-2, -1)) / sqrt(self.d_k)
 
-        # print(f'interim result.shape: {interim_result.shape}')
-
         if mask is not None:
-            # print(f'mask_0.shape: {mask.shape}')
             mask = mask.unsqueeze(1)
-            # print(f'mask_1.shape: {mask.shape}')
-            # if encoder_output is None: mask = mask.unsqueeze(3)
-            # print(f'mask_2.shape: {mask.shape}')
-
-            # print(f'{interim_result.shape}: {interim_result}\n************************************\n')
             interim_result = interim_result.masked_fill(mask == 0, -1e9)
-            # print(f'{interim_result.shape}: {interim_result}\n*************************************\n')
 
         interim_result = F.softmax(interim_result, dim=-1)
 
@@ -84,11 +66,9 @@ class MultiHeadAttention(nn.Module):
             interim_result = self.dropout(interim_result)
 
         interim_result = torch.matmul(interim_result, values)
-        # print(f"shape after matmul values: {interim_result.shape}")
 
         concatenated_result = interim_result.transpose(1, 2).contiguous().view(batch_size, -1, self.model_dim)
 
         final_result = self.final_layer(concatenated_result)
-        # print(f"final_result.shape: {final_result.shape}\n")
 
         return final_result

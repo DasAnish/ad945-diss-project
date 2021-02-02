@@ -6,6 +6,8 @@ from utils import *
 from typing import List, Optional
 import copy
 
+Tensor = torch.Tensor
+
 """In this file, everything has been put together to build the Transformer architecture."""
 
 
@@ -49,7 +51,7 @@ class TransformerEncoderLayer(nn.Module):
         if self.norm_before:
             y = self.attn_norm(x)
         # print('encoder_attention')
-        y = self.self_attn(y, mask)
+        y = self.self_attn(y, y, y, mask)
         y = self.attn_dropout(y)
         x = x + y
         if not self.norm_before:
@@ -152,7 +154,7 @@ class TransformerDecoderLayer(nn.Module):
         if self.norm_before:
             y = self.self_attn_norm(x)
         # print('decoder_attention')
-        y = self.self_attn(y, trg_mask)
+        y = self.self_attn(y, y, y, trg_mask)
         y = self.self_attn_dropout(y)
         x = x + y
         if not self.norm_before:
@@ -162,7 +164,8 @@ class TransformerDecoderLayer(nn.Module):
         if self.norm_before:
             y = self.enc_dec_norm(x)
         # print('enc_dec_attn')
-        y = self.enc_dec_attn(y, src_mask, encoder_output)
+        y = self.enc_dec_attn(y, encoder_output, encoder_output,
+                              src_mask)
         y = self.enc_dec_dropout(y)
         x = x + y
         if not self.norm_before:

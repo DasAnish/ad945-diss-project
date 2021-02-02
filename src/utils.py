@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from torch import Tensor
 from torch.autograd import Variable
 from math import sqrt
+from datetime import datetime
 
 
 class PositionalEncoding(nn.Module):
@@ -31,7 +32,9 @@ class PositionalEncoding(nn.Module):
             position_vector[:, 2*i] = torch.sin(arange / (10000 ** (2*i / model_dim)))
             position_vector[:, 2*i+1] = torch.cos(arange / (10000 ** (2*i / model_dim)))
 
+        # position_vector: max_seq_len x model_dim
         position_vector = position_vector.unsqueeze(0)
+        # position_vector: 1 x max_seq_len x model_dim
         self.register_buffer('position_vector', position_vector)
 
     def forward(self, x: Tensor) -> Tensor:
@@ -82,9 +85,6 @@ class FeedForward(nn.Module):
         x = self.fc2(x)
 
         return x
-
-
-from datetime import datetime
 
 
 class Log:

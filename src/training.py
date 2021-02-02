@@ -20,7 +20,7 @@ log = Log()
 input_file = 'data/News-Commentary.de-en.'
 model_file = 'data/SPM.de-en.'
 
-vocab_size = 10000
+vocab_size = 32000
 
 # making the vocab file if it hasn't been made
 if not os.path.exists(f"{model_file}de.model") or not os.path.exists(f"{model_file}en.model"):
@@ -53,59 +53,75 @@ trg_end = encoder_en.eos_id()
 
 tokenized_split_data_file = 'data/tokenized_split_data'
 
-max_len = 75
+max_len = 150
 
-# loading the tokenized bins
-if os.path.exists(tokenized_split_data_file):
-    log.print('loading from tokenized bins file')
-    with open(tokenized_split_data_file, 'rb') as f:
-        train_src_bins = pickle.load(f)
-        train_trg_bins = pickle.load(f)
 
-else:
-    # Tokenizing the raw files
-    with open(f'{input_file}de', encoding='utf-8') as f:
-        pairs_de = f.read()
-    with open(f'{input_file}en', encoding='utf-8') as f:
-        pairs_en = f.read()
+def load_bins(file=tokenized_split_data_file, input_file=input_file, src='de', trg='en'):
+    # loading the tokenized bins
+    if os.path.exists(file):
+        log.print('loading from tokenized bins file')
+        with open(file, 'rb') as f:
+            src_bins = pickle.load(f)
+            trg_bins = pickle.load(f)
 
-    _src_list = pairs_de.split("\n")
-    _trg_list = pairs_en.split('\n')
+    else:
+        # Tokenizing the raw files
+        with open(f'{input_file}{src}', encoding='utf-8') as f:
+            pairs_src = f.read()
+        with open(f'{input_file}{trg}', encoding='utf-8') as f:
+            pairs_trg = f.read()
 
-    _src_list = [[src_start] + encoder_de.encode(s) + [src_end]
-                 for s in _src_list]
-    _trg_list = [[trg_start] + encoder_en.encode(s) + [trg_end]
-                 for s in _trg_list]
+        _src_list = pairs_src.split("\n")
+        _trg_list = pairs_trg.split('\n')
 
-    log.print('Tokenized')
+        _src_list = [[src_start] + encoder_de.encode(s) + [src_end]
+                     for s in _src_list]
+        _trg_list = [[trg_start] + encoder_en.encode(s) + [trg_end]
+                     for s in _trg_list]
 
-    train_src_bins = {30: [], 40: [], 50: [], 60: [], 75: []}
-    train_trg_bins = {30: [], 40: [], 50: [], 60: [], 75: []}
+        log.print('Tokenized')
 
-    for src, trg in zip(_src_list, _trg_list):
+        bins = [30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150]
+        src_bins = {i:[] for i in bins}
+        trg_bins = {i:[] for i in bins}
 
-        # filtering out the long sentences
-        if len(src) > max_len or len(trg) > max_len:
-            continue
+        for src, trg in zip(_src_list, _trg_list):
 
-        lsrc = len(src)
-        ltrg = len(trg)
+            # filtering out the long sentences
+            if len(src) > max_len or len(trg) > max_len:
+                continue
 
-        # sorting the sentences according to size
-        for v in [30, 40, 50, 60, 75]:
-            if lsrc <= v and ltrg <= v:
-                for _ in range(lsrc, v):
-                    src.append(src_pad)
-                for _ in range(ltrg, v):
-                    trg.append(trg_pad)
+            lsrc = len(src)
+            ltrg = len(trg)
 
-                train_src_bins[v].append(src)
-                train_trg_bins[v].append(trg)
-                break
+            # sorting the sentences according to size
+            for v in bins:
+                if lsrc <= v and ltrg <= v:
+                    for _ in range(lsrc, v):
+                        src.append(src_pad)
+                    for _ in range(ltrg, v):
+                        trg.append(trg_pad)
 
-    log.print("Filtered long sentences")
+                    src_bins[v].append(src)
+                    trg_bins[v].append(trg)
+                    break
 
-log.print({v: len(train_src_bins[v]) for v in train_src_bins})
+        log.print("Filtered long sentences")
+
+    log.print({v: len(src_bins[v]) for v in src_bins})
+
+    # if the tokenized file isn't made then we save it
+    if not os.path.exists(file):
+        with open(file, 'wb') as f:
+            pickle.dump(src_bins, f)
+            pickle.dump(trg_bins, f)
+
+    return src_bins, trg_bins
+
+
+train_src_bins, train_trg_bins = load_bins()
+
+dev_src_bins, dev_trg_bins = load_bins(file='data/tokenized_split_dev', input_file='data/DEV-de-en.')
 
 
 # Function to save the model and optimizer
@@ -134,8 +150,8 @@ def batch(size, src_list, trg_list, shuffle=True):
 
 
 # creates a fixed token_size batches
-def batch_for_bins(token_size, src_bins, trg_bins, shuffle=True):
-    bins = [30, 40, 50, 60, 75]
+def batch_for_bins(token_size, src_bins, trg_bins, shuffle=True, one_pass=False):
+    bins = [30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150]
 
     src_bins_np = {v: np.array(src_bins[v]) for v in bins}
     trg_bins_np = {v: np.array(trg_bins[v]) for v in bins}
@@ -154,18 +170,13 @@ def batch_for_bins(token_size, src_bins, trg_bins, shuffle=True):
             batch_size = token_size // v
 
             for i in range(0, len(src_lis), batch_size):
-                # print(i, end=', ')
                 src = src_lis[i: i + batch_size]
                 trg = trg_lis[i: i + batch_size]
 
                 yield src, trg, v
 
-
-# if the tokenized file isn't made then we save it
-if not os.path.exists(tokenized_split_data_file):
-    with open(tokenized_split_data_file, 'wb') as f:
-        pickle.dump(train_src_bins, f)
-        pickle.dump(train_trg_bins, f)
+        if one_pass:
+            break
 
 
 # Defining the model variables
@@ -221,73 +232,63 @@ else:
 
 
 # The evaluation function that will predict the sentence
-def eval(batch_size=5, model_file=None, src_list=train_src_bins[30], trg_list=train_trg_bins[30]):
+def eval(token_size=1500, model_file=None, src_bins=dev_src_bins, trg_bins=dev_trg_bins):
     if model_file is not None:
-        model.load_state_dict(torch.load(model_file))
-    model.eval()
-    model.to(device)
+        eval_model = Transformer(*args)
+        eval_model.load_state_dict(torch.load(model_file))
+    else:
+        eval_model = model
+    batches = batch_for_bins(token_size, src_bins, trg_bins, one_pass=True, shuffle=False)
 
-    batches = batch(batch_size, src_list, trg_list, shuffle=False)
-
-    src_lis_, trg_lis_ = next(batches)
     trg_sentences = []
     out_sentences = []
-    blue_score = 0
-    for i, (src_lis, trg_lis) in enumerate(batch(1, src_lis_, trg_lis_, shuffle=False)):
-        if i >= batch_size: break
 
-        src_mask = torch.tensor(np.array(src_lis) != src_pad).to(device).unsqueeze(1)
+    for i, (src_list, trg_list, ml) in enumerate(batches):
+        print(ml, end=",")
+        # if (i + 1) % 20 == 0: print()
+        # batch_size = len(src_list)
 
-        src_tensor = torch.LongTensor(src_lis).to(device)
+        src_mask = torch.tensor(np.array(src_list) != src_pad).to(device).unsqueeze(1)
+        src_tensor = torch.LongTensor(src_list).to(device)
 
-        trg = np.array([[trg_start] for _ in range(1)])
-        trg_pads = np.array([[trg_pad] for _ in range(1)])
+        trg = np.array([[trg_start] for _ in range(token_size)])
+        trg_pads = np.array([[trg_pad] for _ in range(token_size)])
 
-        enc_output = model.encoder(src_tensor, src_mask)
+        enc_output = eval_model.encoder(src_tensor, src_mask)
 
-        for i in range(1, max_len):
+        for i in range(1, ml):
             trg_tensor = torch.LongTensor(np.concatenate([trg, trg_pads], axis=1)).to(device)
             trg_mask = ((trg_tensor != trg_pad) * 1).unsqueeze(1)
 
-            dec_output = model.decoder(trg_tensor, enc_output, src_mask, trg_mask)
-            preds = model.linear(dec_output)
-            preds = F.softmax(preds, dim=-1)
+            dec_output = eval_model.decoder(trg_tensor, enc_output, src_mask, trg_mask)
+            preds = eval_model.linear(dec_output)
 
             output = torch.argmax(preds[:, i], dim=1).unsqueeze(1).tolist()
             output = np.array(output)
-            trg = np.concatenate([trg, output], axis=1)
 
-            o = output[0]
+            trg = np.concatenate([trg, output], axis=1)
 
             del trg_mask, dec_output, preds, output, trg_tensor
             torch.cuda.empty_cache()
 
-            if o == trg_end: break
-
-        del enc_output
+        del src_mask, src_tensor, enc_output
         torch.cuda.empty_cache()
 
-        for i in range(1):
-
-            trg_sentence = ''.join(encoder_en.decode(trg_lis[i].tolist())).replace('_', ' ')
+        for i in range(token_size):
+            trg_sentence = ''.join(encoder_en.decode(trg_list[i].tolist())).replace('_', ' ')
             out_sentence = ''.join(encoder_en.decode(trg[i].tolist())).replace('_', ' ')
 
             trg_sentences.append(trg_sentence)
             out_sentences.append(out_sentence)
 
-        del src_mask, src_tensor
-        torch.cuda.empty_cache()
-
-    blue_score = sacrebleu.corpus_bleu(out_sentences, [trg_sentences])
-    print(blue_score)
+    return sacrebleu.corpus_bleu(out_sentences, [trg_sentences])
 
 
 model_prefix = 'de-en-model-'
 
 
 # The algorithm that trains the batch_size
-def train_model(batch_size, epochs, print_every, save_every, eval_every):
-
+def train_model(batch_size, epochs, print_every, save_every, epsilon=0.1, warmup_steps = 16000):
     model.train()
 
     start = time.time()
@@ -298,6 +299,8 @@ def train_model(batch_size, epochs, print_every, save_every, eval_every):
     r = save_every / print_every
 
     batches = batch_for_bins(batch_size, train_src_bins, train_trg_bins, shuffle=True)
+
+    prev_scores = []
 
     for epoch, (src_lis, trg_lis, ml) in enumerate(batches):
         if epoch > epochs: break
@@ -329,6 +332,8 @@ def train_model(batch_size, epochs, print_every, save_every, eval_every):
         total_loss += loss.item()
 
         optim.step()
+        step = starting_index + epoch
+        optim.param_groups[0]['lr'] = (model_dim ** (-0.5)) * min(step ** (-0.5), step * (warmup_steps ** (-1.5)))
 
         del src_mask, src_tensor, trg_mask, trg_tensor, preds, loss
         torch.cuda.empty_cache()
@@ -355,21 +360,30 @@ def train_model(batch_size, epochs, print_every, save_every, eval_every):
             avg = '%.3f' % avg
             diff = '%.3f' % diff
 
-            log.print(f"****Saving model: {model_name} | avg_loss: {avg} | diff: {diff}****")
+            bleu_score, perpexity = eval()
+            score = '%.3f' % bleu_score.score
 
-        if (epoch + 1) % eval_every == 0:
-            eval(src_list=train_src_bins[30], trg_list=train_trg_bins[30])
+            prev_avg_score = sum(prev_scores) / len(prev_scores)
+
+            if len(prev_scores) > 5 and \
+                    prev_avg_score - bleu_score.score < epsilon:
+                break
+
+            prev_scores.append(bleu_score.score)
+            if len(prev_scores) > 5: prev_scores.pop(0)
+
+            log.print((f"Saving model: {model_name} | avg_loss: {avg} | diff: {diff}\n"
+                       f"BLUE: {score} | perplexity: {perpexity}"))
             model.train()
 
         log.flush()
 
-# print("*******************HERE********************")
+
 if __name__ == '__main__':
     try:
         eval()
         log.print("Starting the training")
-        bs = 200 * 75
-        train_model(bs, 200000, eval_every=3000, save_every=3000, print_every=300)
+        train_model(batch_size=2500, epochs=1200000, save_every=18000, print_every=1800)
 
     except Exception as e:
         log.print(e, type=Log.ERROR)
