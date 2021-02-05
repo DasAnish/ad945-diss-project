@@ -124,12 +124,6 @@ train_src_bins, train_trg_bins = load_bins()
 dev_src_bins, dev_trg_bins = load_bins(file='data/tokenized_split_dev', input_file='data/DEV-de-en.')
 
 
-# Function to save the model and optimizer
-def save(model, model_file, optim, optim_file):
-    torch.save(model.state_dict(), model_file)
-    torch.save(optim.state_dict(), optim_file)
-
-
 # Creates shuffles the list and creates a batch of batch_size
 def batch(size, src_list, trg_list, shuffle=True):
     src_np = np.array(src_list)
@@ -151,32 +145,45 @@ def batch(size, src_list, trg_list, shuffle=True):
 
 # creates a fixed token_size batches
 def batch_for_bins(token_size, src_bins, trg_bins, shuffle=True, one_pass=False):
-    bins = [30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150]
+    # bins = [30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150]
+    bins = [i for i in range(150, 20, -10)]
+    np.random.shuffle(bins)
 
     src_bins_np = {v: np.array(src_bins[v]) for v in bins}
     trg_bins_np = {v: np.array(trg_bins[v]) for v in bins}
 
+    if one_pass: total = sum(v * len(src_bins[v]) for v in src_bins)
+
     arange = {v: np.arange(len(src_bins[v])) for v in src_bins}
 
-    while True:
-        for v in bins:
-            src_lis = src_bins_np[v]
-            trg_lis = trg_bins_np[v]
-            if shuffle:
-                np.random.shuffle(arange[v])
-                src_lis = src_lis[arange[v]]
-                trg_lis = trg_lis[arange[v]]
+    if one_pass: covered = 0
+    for v in bins:
 
-            batch_size = token_size // v
+        src_lis = src_bins_np[v]
+        trg_lis = trg_bins_np[v]
+        if shuffle:
+            np.random.shuffle(arange[v])
+            src_lis = src_lis[arange[v]]
+            trg_lis = trg_lis[arange[v]]
 
-            for i in range(0, len(src_lis), batch_size):
-                src = src_lis[i: i + batch_size]
-                trg = trg_lis[i: i + batch_size]
+        batch_size = token_size // v
 
-                yield src, trg, v
+        for i in range(0, len(src_lis), batch_size):
 
-        if one_pass:
-            break
+            src = src_lis[i: i + batch_size]
+            trg = trg_lis[i: i + batch_size]
+
+            yield src, trg, v
+            if one_pass:
+                covered += v * len(src)
+                print("%.3f" % (covered / total), end=", ")
+        if one_pass and v == 30:
+            print()
+
+
+def save(model, model_file, optim, optim_file):
+    torch.save(model.state_dict(), model_file)
+    torch.save(optim.state_dict(), optim_file)
 
 
 # Defining the model variables
@@ -289,23 +296,51 @@ model_prefix = 'de-en-model-'
 
 
 # The algorithm that trains the batch_size
-def train_model(batch_size, epochs, print_every, save_every, epsilon=0.1, warmup_steps = 16000):
-    model.train()
+log.flush()
+k = 10
+# to adjust for models already present
+model_prefix = 'de-en-model-'
 
+
+# starting_index = 2000
+def train_model(batch_size, epochs, print_every, save_every, epsilon=0.1, warmup_steps=16000, starting_index=0):
     start = time.time()
-    temp = start
-    total_loss = 0
+
+    # batches = batch_for_bins(batch_size, train_src_bins, train_trg_bins, shuffle=True, starting_i=starting_index)
+    prev_scores = []
+    temp = time.time()
+    for epoch in range(epochs):
+        epoch_loss = train_batch(batch_size, warmup_steps=16000, train_step=starting_index,
+                                 print_every=print_every, save_every=save_every, start_time=start)
+
+        bleu_score = eval()
+        score = '%.3f' % bleu_score.score
+
+        prev_scores.append(bleu_score.score)
+        if len(prev_scores) > 5: prev_scores.pop(0)
+
+        prev_avg_score = sum(prev_scores) / len(prev_scores)
+
+        # if len(prev_scores) == 5 and prev_avg_score - bleu_score.score < epsilon:
+        #     break
+
+        log.print(f"{bleu_score}")
+
+
+def train_batch(batch_size, warmup_steps, train_step, print_every, save_every, start_time):
+    model.train()
+    temp = time.time()
+    epoch_loss = 0
     total_loss_at_save = 0
+    total_loss = 0
     last_loss = 0
+    start = start_time
     r = save_every / print_every
 
-    batches = batch_for_bins(batch_size, train_src_bins, train_trg_bins, shuffle=True)
-
-    prev_scores = []
-
-    for epoch, (src_lis, trg_lis, ml) in enumerate(batches):
-        if epoch > epochs: break
-
+    ml_avg = 0
+    for step, (src_lis, trg_lis, ml) in enumerate(
+            batch_for_bins(batch_size, train_src_bins, train_trg_bins, shuffle=True)):
+        ml_avg += ml
         optim.zero_grad()
 
         src_mask = torch.tensor(np.array(src_lis) != src_pad).to(device).unsqueeze(1)
@@ -333,27 +368,30 @@ def train_model(batch_size, epochs, print_every, save_every, epsilon=0.1, warmup
         total_loss += loss.item()
 
         optim.step()
-        step = starting_index + epoch + 1
+        step += train_step + 1
         optim.param_groups[0]['lr'] = (model_dim ** (-0.5)) * min(step ** (-0.5), step * (warmup_steps ** (-1.5)))
 
         del src_mask, src_tensor, trg_mask, trg_tensor, preds, loss
         torch.cuda.empty_cache()
 
-        if (epoch + 1) % print_every == 0:
+        if (step) % print_every == 0:
             avg = "%.3f" % (total_loss)
             t = "%.3f" % (time.time() - temp)
             tt = time.strftime('%H:%M:%S', time.gmtime(time.time() - start))
-            log.print(f"time: {t}s, total: {tt}, cat_loss = {avg}, epoch = {epoch + 1}")
+            ml_avg = "%.3f" % (ml_avg / print_every)
+            log.print(f"time: {t}s, total: {tt}, cat_loss = {avg}, epoch = {step}, avg_length: {ml_avg}")
+            ml_avg = 0
             total_loss_at_save += total_loss
             total_loss = 0
             temp = time.time()
 
-        if (epoch + 1) % save_every == 0:
-            model_name = f'{path}/{model_prefix}{starting_index + epoch + 1}'
+        if (step) % save_every == 0:
+            model_name = f'{path}/{model_prefix}{step}'
 
             save(model, model_name, optim, optim_file)
 
             avg = (total_loss_at_save / r)
+            epoch_loss += total_loss_at_save
             total_loss_at_save = 0
             diff = avg - last_loss
             last_loss = avg
@@ -361,30 +399,22 @@ def train_model(batch_size, epochs, print_every, save_every, epsilon=0.1, warmup
             avg = '%.3f' % avg
             diff = '%.3f' % diff
 
-            bleu_score, perpexity = eval()
-            score = '%.3f' % bleu_score.score
+            log.print(f"Saving model: {model_name} | avg_loss: {avg} | diff: {diff}")
 
-            prev_avg_score = sum(prev_scores) / len(prev_scores)
-
-            if len(prev_scores) > 5 and \
-                    prev_avg_score - bleu_score.score < epsilon:
-                break
-
-            prev_scores.append(bleu_score.score)
-            if len(prev_scores) > 5: prev_scores.pop(0)
-
-            log.print((f"Saving model: {model_name} | avg_loss: {avg} | diff: {diff}\n"
-                       f"BLUE: {score} | perplexity: {perpexity}"))
+            temp = time.time()
             model.train()
 
         log.flush()
+    return epoch_loss
 
 
 if __name__ == '__main__':
+
     try:
-        eval()
+        # print(eval())
         log.print("Starting the training")
-        train_model(batch_size=2500, epochs=1200000, save_every=18000, print_every=1800)
+        train_model(batch_size=5000, epochs=10, save_every=4000, print_every=400, warmup_steps=15000,
+                    starting_index=starting_index)
 
     except Exception as e:
         log.print(e, type=Log.ERROR)
