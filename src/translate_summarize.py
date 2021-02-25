@@ -1,7 +1,7 @@
 import os
-# print(os.getcwd())
+print(os.getcwd())
 # if os.getcwd() == r'D:/Desktop/Diss/ad945-diss-project/src':
-#     os.chdir('..')
+#     os.chdir(r'D:/Desktop/Diss/ad945-diss-project/')
 # print(os.getcwd())
 import subprocess
 from rouge import Rouge
@@ -32,10 +32,10 @@ args = (vocab_size, vocab_size, model_dim, model_dim*4, heads, N, max_len)
 
 model = Transformer(*args)
 
-with open(translate_source_file, 'r', encoding='utf-8') as f:
-    src = f.read()
-with MosesSentenceSplitter('en') as splitter:
-    src_list = splitter([src])
+# with open(translate_source_file, 'r', encoding='utf-8') as f:
+#     src = f.read()
+# with MosesSentenceSplitter('en') as splitter:
+#     src_list = splitter([src])
 
 
 
@@ -44,12 +44,14 @@ summary_input_file = 'data/summary_input.txt'
 summary_interim_file = 'data/summary_interim.txt'
 summary_output_file = 'data/summary_output.txt'
 output = ''
+def norm(x):
+    return x
 # combining file's sentences into one
 with open(summary_input_file, 'r', encoding='utf-8') as f:
-    with MosesPunctuationNormalizer('en') as norm:
-        for line in f.readlines():
-            line = line.strip('\n').strip(' ')
-            output += norm(line) + " "
+    # with MosesPunctuationNormalizer('en') as norm:
+    for line in f.readlines():
+        line = line.strip('\n').strip(' ')
+        output += norm(line) + " "
 with open(summary_interim_file, 'w', encoding='utf-8') as f:
     f.write(output)
 

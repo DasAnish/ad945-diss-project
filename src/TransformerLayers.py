@@ -11,6 +11,42 @@ Tensor = torch.Tensor
 """In this file, everything has been put together to build the Transformer architecture."""
 
 
+class Transformer(nn.Module):
+    def __init__(self, src_vocab_size: int, trg_vocab_size: int,
+                 model_dim: int, d_ff: int, heads: int, num_blocks: int,
+                 max_seq_len: Optional[int] = 80, dropout: Optional[float] = 0.1,
+                 norm_before: bool = False):
+        super().__init__()
+
+        if torch.cuda.is_available():
+            dev = "cuda:0"
+        else:
+            dev = "cpu"
+
+        device = torch.device(dev)
+
+        self.encoder: TransformerEncoder = TransformerEncoder(model_dim, d_ff, heads, num_blocks,
+                                                              src_vocab_size, max_seq_len, dropout,
+                                                              norm_before).to(device)
+        self.decoder: TransformerDecoder = TransformerDecoder(model_dim, d_ff, heads, num_blocks,
+                                                              trg_vocab_size, max_seq_len, dropout,
+                                                              norm_before).to(device)
+
+        self.linear: nn.Linear = nn.Linear(model_dim, trg_vocab_size).to(device)
+
+        self.add_module('encoder', self.encoder)
+        self.add_module('decoder', self.decoder)
+        self.add_module('linear', self.linear)
+
+    def forward(self, src: Tensor, trg: Tensor, src_mask: Tensor, trg_mask: Tensor):
+        enc_output = self.encoder(src, src_mask)
+        dec_output = self.decoder(trg, enc_output, src_mask, trg_mask)
+        output = self.linear(dec_output)
+        del enc_output, dec_output
+        torch.cuda.empty_cache()
+        return output
+
+
 class TransformerEncoderLayer(nn.Module):
     def __init__(self, model_dim: int, heads: int, d_ff: int,
                  dropout: Optional[float] = 0.1, norm_before: bool = False):
@@ -186,7 +222,7 @@ class TransformerDecoderLayer(nn.Module):
 class TransformerDecoder(nn.Module):
     def __init__(self, model_dim: int, d_ff: int, heads: int, num_blocks: int,
                  vocab_size: int, max_seq_len: Optional[int] = 80,
-                 dropout: Optional[float] = 0.1, norm_before: bool = False):
+                 dropout: Optional[float] = 0.1, norm_before: bool = True):
         super().__init__()
 
         if torch.cuda.is_available():
@@ -225,41 +261,5 @@ class TransformerDecoder(nn.Module):
         return x
 
 
-class Transformer(nn.Module):
-    def __init__(self, src_vocab_size: int, trg_vocab_size: int,
-                 model_dim: int, d_ff: int, heads: int, num_blocks: int,
-                 max_seq_len: Optional[int] = 80, dropout: Optional[float] = 0.1,
-                 norm_before: bool = False):
-        super().__init__()
 
-        if torch.cuda.is_available():
-            dev = "cuda:0"
-        else:
-            dev = "cpu"
-
-        device = torch.device(dev)
-
-        self.encoder: TransformerEncoder = TransformerEncoder(model_dim, d_ff, heads, num_blocks,
-                                                              src_vocab_size, max_seq_len, dropout,
-                                                              norm_before).to(device)
-        self.decoder: TransformerDecoder = TransformerDecoder(model_dim, d_ff, heads, num_blocks,
-                                                              trg_vocab_size, max_seq_len, dropout,
-                                                              norm_before).to(device)
-
-        self.linear: nn.Linear = nn.Linear(model_dim, trg_vocab_size).to(device)
-
-        self.add_module('encoder', self.encoder)
-        self.add_module('decoder', self.decoder)
-        self.add_module('linear', self.linear)
-
-    def forward(self, src: Tensor, trg: Tensor, src_mask: Tensor, trg_mask: Tensor):
-        enc_output = self.encoder(src, src_mask)
-        dec_output = self.decoder(trg, enc_output, src_mask, trg_mask)
-        output = self.linear(dec_output)
-        del enc_output, dec_output
-        torch.cuda.empty_cache()
-        return output
-
-    def save_model(self, file_name):
-      torch.save(self.state_dict(), file_name)
 
