@@ -78,4 +78,6 @@ def create_dataset(opt):
             pickle.dump(opt.src_bins, f)
             pickle.dump(opt.trg_bins, f)
 
-    print({s: len(opt.src_bins[s]) for s in opt.bins})
+    temp = {s: len(opt.src_bins[s]) for s in opt.bins}
+    opt.train_len = sum([temp[v] for v in opt.bins])
+    print(temp)

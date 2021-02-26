@@ -3,6 +3,7 @@ import torch.nn as nn
 from src.TransformerLayers import Transformer
 import os
 
+
 class Save:
     def __init__(self, model_state_dict=None, optim_state_dict=None):
         self.model_state_dict = model_state_dict
@@ -24,19 +25,10 @@ class Save:
 
 
 def load_model(opt):
-    # opt.path = f'{opt.src_lang}-en-models'
-    # opt.model_prefix = f'{opt.src_lang}-en-model-'
-    # # optim_file = 'data/optim_state_dict'
-    # opt.model_dim = 512
-    # opt.heads = 8
-    # opt.N = 6
-    # opt.args = (opt.vocab_size, opt.vocab_size,
-    #             opt.model_dim, opt.model_dim * 4,
-    #             opt.heads, opt.N, opt.max_len, 0.1, True)
 
     model = Transformer(*opt.args)
     optim = torch.optim.Adam(model.parameters(), lr=0.0001, betas=(0.9, 0.98), eps=1e-9)
-    opt.save_model = Save()
+
     starting_index = 0
     for p in model.parameters():
         if p.dim() > 1:
@@ -72,3 +64,5 @@ def load_model(opt):
         else:
             opt.log.print(f"Starting from xavier_uniform distribution")
     opt.starting_index = starting_index
+
+    return model, optim
