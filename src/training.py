@@ -1,64 +1,18 @@
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 Tensor = torch.Tensor
-from src.TransformerLayers import Transformer
 from src.utils import *
 from src.save_load import *
 from src.text_preprocessing import *
 import sacrebleu
-import pickle
 import numpy as np
 import time
-import os
-import sentencepiece as spm
+from src.opt import Opt
 
 Log().close()
 log = Log()
 
-
-class Opt:
-    pass
-
-
 opt = Opt()
-opt.src_lang = 'es'
-opt.trg_lang = 'en'
-opt.num_mil = 1
-opt.data_path = '/content/drive/MyDrive/Dissertation/data'
-opt.input_file = f'{opt.data_path}/{opt.src_lang}/ParaCrawl.{opt.src_lang}-{opt.trg_lang}.'
-opt.model_file = f'{opt.data_path}/{opt.src_lang}/SPM-{opt.num_mil}m-8k.{opt.src_lang}-{opt.trg_lang}.'
-opt.interim_file = f'{opt.data_path}/{opt.src_lang}/ParaCrawl.{opt.src_lang}-{opt.trg_lang}.{opt.num_mil}m.'
-opt.dataset = f'{opt.data_path}/{opt.src_lang}/tokenized_dataset_{opt.src_lang}_{opt.num_mil}m'
-opt.dev_dataset = f'{opt.data_path}/{opt.src_lang}/DEV-{opt.src_lang}-{opt.trg_lang}.'
-# opt.model_file = 'data/SPM-1m-8k.fr-en.'
-opt.max_len = 150
-opt.dev_dataset = f'data/{opt.src_lang}/DEV-{opt.src_lang}-{opt.trg_lang}.'
 
-
-opt.src_data_path = opt.interim_file + opt.src_lang
-opt.trg_data_path = opt.interim_file + opt.trg_lang
-opt.vocab_size = 8000
-opt.tokensize = 2048
-opt.k = 10
-opt.print_every = 200
-opt.save_every = 5000
-opt.epochs = 10
-opt.warmup_steps = 16000
-opt.keep_training = True
-
-opt.save_model = Save()
-
-opt.path = f'{opt.src_lang}-en-models'
-opt.model_prefix = f'{opt.src_lang}-en-model-'
-# optim_file = 'data/optim_state_dict'
-opt.model_dim = 512
-opt.heads = 8
-opt.N = 6
-opt.args = (opt.vocab_size, opt.vocab_size,
-            opt.model_dim, opt.model_dim*4,
-            opt.heads, opt.N, opt.max_len, 0.1, True)
-opt.log = log
 
 create_fields(opt)
 create_dataset(opt)
@@ -75,15 +29,12 @@ opt.device = device
 
 def evaluate(model, opt):
     model.eval()
-
-    # translated = []
     start = time.time()
 
     refs = []
     hyp = []
     opt.skip = []
 
-    # print(len(opt.dev_src_sentences))
     tk2 = tnrange(len(opt.dev_src_sentences))
     for i in tk2:
         sentence = opt.dev_src_sentences[i]
@@ -91,7 +42,6 @@ def evaluate(model, opt):
             translated = translate_sentence(sentence.lower(), model, opt)
         except:
             opt.skip.append(i)
-            # raise e
         else:
             refs.append(opt.dev_trg_sentences[i])
             hyp.append(translated)
@@ -102,7 +52,6 @@ def evaluate(model, opt):
                 opt.log.print(ref_print, shell=False)
                 opt.log.print('', shell=False)
                 opt.log.flush()
-        # print()
 
         if i == len(opt.dev_src_sentences) - 1:
             opt.hyp = hyp
@@ -119,14 +68,13 @@ def evaluate(model, opt):
 def train_model(model, opt):
     model.train()
 
-    # starting_index += _starting_index
-
     start = time.time()
 
     total_loss = 0
     total_loss_at_save = 0
     last_loss = 0
     r = opt.save_every / opt.print_every
+    epsilon = 0.1
 
     prev_scores = []
     tk0 = tnrange(opt.epochs)
@@ -200,15 +148,14 @@ def train_model(model, opt):
 
             if step % opt.train_len == 0:
                 bleu_score, ter = evaluate(model, opt)
-                score = '%.3f' % bleu_score.score
 
                 prev_scores.append(bleu_score.score)
                 if len(prev_scores) > 5: prev_scores.pop(0)
 
-                # prev_avg_score = sum(prev_scores) / len(prev_scores)
+                prev_avg_score = sum(prev_scores) / len(prev_scores)
 
-                # if len(prev_scores) == 5 and prev_avg_score - bleu_score.score < epsilon:
-                #     break
+                if len(prev_scores) == 3 and prev_avg_score - bleu_score.score < epsilon:
+                    break
 
                 log.print(f"{ter} || {bleu_score}")
                 temp = time.time()

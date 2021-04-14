@@ -3,6 +3,7 @@ import sentencepiece as spm
 import pickle
 from tqdm.notebook import tnrange
 
+
 def create_fields(opt):
     print('creating fields')
 

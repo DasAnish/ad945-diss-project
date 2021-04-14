@@ -200,7 +200,23 @@ def create_masks(src, trg, opt):
     return src_mask, trg_mask
 
 
-def init_vars(src, model, opt):
+def k_best_outputs(outputs, out, log_scores, i, k):
+    probs, ix = out[:, -1].data.topk(k)
+    log_probs = torch.Tensor([math.log(p) for p in probs.data.view(-1)]).view(k, -1) + log_scores.transpose(0, 1)
+    k_probs, k_ix = log_probs.view(-1).topk(k)
+
+    row = k_ix // k
+    col = k_ix % k
+
+    outputs[:, :i] = outputs[row, :i]
+    outputs[:, i] = ix[row, col]
+
+    log_scores = k_probs.unsqueeze(0)
+
+    return outputs, log_scores
+
+
+def beam_search(src, model, opt):
     init_tok = opt.trg_bos
     src_mask = (src != opt.src_pad).unsqueeze(-2)
     e_output = model.encoder(src, src_mask)
@@ -222,27 +238,6 @@ def init_vars(src, model, opt):
     e_outputs = torch.zeros(opt.k, e_output.size(-2), e_output.size(-1)).to(opt.device)
     e_outputs[:, :] = e_output[0]
 
-    return outputs, e_outputs, log_scores
-
-
-def k_best_outputs(outputs, out, log_scores, i, k):
-    probs, ix = out[:, -1].data.topk(k)
-    log_probs = torch.Tensor([math.log(p) for p in probs.data.view(-1)]).view(k, -1) + log_scores.transpose(0, 1)
-    k_probs, k_ix = log_probs.view(-1).topk(k)
-
-    row = k_ix // k
-    col = k_ix % k
-
-    outputs[:, :i] = outputs[row, :i]
-    outputs[:, i] = ix[row, col]
-
-    log_scores = k_probs.unsqueeze(0)
-
-    return outputs, log_scores
-
-
-def beam_search(src, model, opt):
-    outputs, e_outputs, log_scores = init_vars(src, model, opt)
     eos_tok = opt.trg_eos
     src_mask = (src != opt.src_pad).unsqueeze(-2)
     ind = None
@@ -259,7 +254,7 @@ def beam_search(src, model, opt):
 
         ones = torch.nonzero(outputs == eos_tok)
         # ones = (outputs==eos_tok).nonzero() # Occurrences of end symbols for all input sentences.
-        sentence_lengths = torch.zeros(len(outputs), dtype=torch.long).cuda()
+        sentence_lengths = torch.zeros(len(outputs), dtype=torch.long).to(opt.device)
         for vec in ones:
             i = vec[0]
             if sentence_lengths[i] == 0:  # First end symbol has not been found yet
@@ -275,7 +270,6 @@ def beam_search(src, model, opt):
             break
 
     if ind is None:
-        # print(outputs)
         length = (outputs[0] == eos_tok).nonzero()[0]
         sentence_list = (outputs[0][1:length]).tolist()
         return ''.join(opt.trg_processor.decode(sentence_list)).replace('_', " ")

@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from src.TransformerLayers import Transformer
+from src.transformer_layers import Transformer
 import os
 
 
