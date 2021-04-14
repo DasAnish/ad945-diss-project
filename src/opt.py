@@ -47,8 +47,12 @@ class Opt:
                           length_limit=False)
 
     @property
-    def input_file(self):
+    def pc_input_file(self):
         return f'../data/{self.src_lang}/ParaCrawl.{self.src_lang}-{self.trg_lang}.'
+
+    @property
+    def nc_input_file(self):
+        return f'../data/{self.src_lang}/News-Commentary.{self.src_lang}-{self.trg_lang}.'
 
     @property
     def model_file(self):

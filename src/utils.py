@@ -129,12 +129,17 @@ class Log:
 
 def move(opt):
     def move_lang(lang):
-        inpFile = open(opt.input_file + lang, 'r', encoding='utf-8')
+        inpFile1 = open(opt.pc_input_file + lang, 'r', encoding='utf-8')
+        inpFile2 = open(opt.nc_input_file + lang, 'r', encoding='utf-8')
         intFile = open(opt.interim_file + lang, 'w', encoding='utf-8')
 
-        for i in tnrange(int(opt.num_mil * 10**6)):
-            intFile.write(inpFile.readline())
-        inpFile.close()
+        for i in tnrange(int(opt.num_mil * 2 * 10**5)):
+            intFile.write(inpFile2.readline())
+        for i in tnrange(int(opt.num_mil * 8 * 10**5)):
+            intFile.write(inpFile1.readline())
+
+        inpFile1.close()
+        inpFile2.close()
         intFile.close()
     move_lang(opt.src_lang)
     move_lang(opt.trg_lang)
