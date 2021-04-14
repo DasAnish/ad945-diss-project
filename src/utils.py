@@ -156,7 +156,7 @@ def batch(opt):
     batch_sizes = {v: opt.tokensize // v for v in opt.bins}
 
     step = 0
-    while (len(max_count)):
+    while len(max_count):
         v = np.random.choice(list(max_count.keys()))
         i = cur_count[v]
         cur_count[v] += 1

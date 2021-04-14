@@ -4,18 +4,18 @@ from rouge import Rouge
 
 
 class Opt:
-    def __init__(self):
-        self.src_lang = 'de'
+    def __init__(self, src_lang='es'):
+        self.src_lang = src_lang
         self.trg_lang = 'en'
 
-        self.k = 20
+        self.k = 10
         self.model_num = 1000 * 120
 
         self.num_mil = 1
         self.max_len = 150
 
         self.vocab_size = 8000
-        self.tokensize = 2048
+        self.tokensize = 4096
         self.print_every = 200
         self.save_every = 5000
         self.epochs = 10

@@ -5,16 +5,6 @@ from tqdm.notebook import tnrange
 
 
 def create_fields(opt):
-    print('creating fields')
-
-    if not os.path.exists(f"{opt.model_file}{opt.src_lang}.model"):
-        print('building src processor')
-        raise Exception
-
-    if not os.path.exists(f"{opt.model_file}{opt.trg_lang}.model"):
-        print('building trg processor')
-        raise Exception
-
     print("initlizing sentence processors")
     opt.src_processor = spm.SentencePieceProcessor()
     opt.src_processor.Init(model_file=f'{opt.model_file}{opt.src_lang}.model')
