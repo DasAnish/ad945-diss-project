@@ -6,7 +6,7 @@ class Opt:
 
     __instance = None
 
-    @classmethod
+    @staticmethod
     def get_instance():
         if Opt.__instance is None:
             Opt()
