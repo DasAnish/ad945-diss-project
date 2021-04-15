@@ -2,7 +2,8 @@ import os
 import pickle
 from tqdm.notebook import tnrange
 from src.transformer_layers import Transformer
-from src.utils import PositionalEncoding, translate_sentence
+from src.utils import translate_sentence
+from src.sub_layers import PositionalEncoding
 from src.text_preprocessing import create_fields
 from src.opt import Opt
 import sacrebleu
