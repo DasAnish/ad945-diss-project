@@ -47,7 +47,6 @@ def get_baseline_scores():
             'rouge-crowd::perf-trans': opt.rouge.get_scores(perfect_trans_preds, crowds)
             }
 
-
 def get_scores():
     opt = Opt.get_instance()
     read_in_jsons()
@@ -98,6 +97,13 @@ def get_scores():
 
         trg_text_temp = ' '.join(json['trg_txt'])
         first_50_preds.append(' '.join(trg_text_temp.split(' ')[:50]))
+
+        _pred = opt.perf_trans_summarized[i]['pred']
+        _pred = _pred.replace('<t>', '')
+        _pred = _pred.replace('</t>', '')
+        _pred = _pred.replace('.', '')
+        _pred = _pred.replace('  ', ' ')
+        perfect_trans_preds.append(_pred)
 
         # translation quality
         refs.append(trg_text_temp)

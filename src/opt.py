@@ -8,7 +8,6 @@ class Opt:
 
     @staticmethod
     def get_instance():
-        print('here')
         if Opt.__instance is None:
             Opt()
 
