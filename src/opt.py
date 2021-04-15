@@ -8,6 +8,7 @@ class Opt:
 
     @staticmethod
     def get_instance():
+        print('here')
         if Opt.__instance is None:
             Opt()
 
@@ -38,6 +39,8 @@ class Opt:
         self.keep_training = False
 
         self.save_model = Save()
+
+        self.data_path = '/content/drive/MyDrive/Dissertation/data'
 
         self.eval_path = '/content/drive/MyDrive/Dissertation/eval/'
         self.summary_model_path = '/content/drive/MyDrive/Dissertation/summary_model/ada6_bridge_oldcopy_tagged_larger_acc_54.84_ppl_10.58_e17.pt'
@@ -95,11 +98,11 @@ class Opt:
 
     @property
     def gv_crowd_path(self):
-        return f'{self.eval_path}gv_crowd.json'
+        return f'{self.eval_path}gv/gv_crowd.json'
 
     @property
     def gv_snippet_path(self):
-        return f'{self.eval_path}gv_snippet.json'
+        return f'{self.eval_path}gv/gv_snippet.json'
 
     @property
     def test_restults_path(self):
@@ -111,7 +114,7 @@ class Opt:
 
     @property
     def path(self):
-        return f'/content/drive/MyDrive/Dissertation/{self.src_lang}-en-models'
+        return f'{self.data_path}/{self.src_lang}/{self.src_lang}-en-models'
 
     @property
     def model_prefix(self):
@@ -123,35 +126,35 @@ class Opt:
 
     @property
     def translated_path(self):
-        return f'{self.eval_path}/{self.src_lang}/model-{self.model_num}-translated'
+        return f'{self.data_path}/{self.src_lang}/model-{self.model_num}-translated'
 
     @property
     def summary_input_path(self):
-        return f'{self.eval_path}{self.src_lang}/{self.translator_model_file}'
+        return f'{self.data_path}/{self.src_lang}/{self.translator_model_file}'
 
     @property
     def summary_output_path(self):
-        return f'{self.eval_path}{self.src_lang}/summarized-{self.translator_model_file}'
+        return f'{self.data_path}/{self.src_lang}/summarized-{self.translator_model_file}'
 
     @property
     def summarized_path(self):
-        return f'{self.eval_path}{self.src_lang}/model-{self.model_num}-summarized'
+        return f'{self.data_path}/{self.src_lang}/model-{self.model_num}-summarized'
 
     @property
     def src_txt_path(self):
-        return f"{self.eval_path}{self.src_lang}/src_txt"
+        return f"{self.data_path}/{self.src_lang}/src_txt"
 
     @property
     def trg_txt_path(self):
-        return f"{self.eval_path}{self.src_lang}/trg_txt"
+        return f"{self.data_path}/{self.src_lang}/trg_txt"
 
     @property
     def perf_trans_file_name(self):
-        return f'{self.eval_src_path}/perfect-translation-summarized'
+        return f'{self.data_path}/{self.src_lang}/perfect-translation-summarized'
 
     @property
     def perf_trans_path(self):
-        return f'{self.eval_src_path}/summarized-perfect-translation'
+        return f'{self.data_path}/{self.src_lang}/summarized-perfect-translation'
 
 
 class Save:
