@@ -1,10 +1,12 @@
 import os
 import subprocess
 from tqdm.notebook import tnrange
+from src.opt import Opt
 import pickle
 
 
-def perfect_trans_summary(opt):
+def perfect_trans_summary():
+    opt = Opt.get_instance()
     if os.path.exists(opt.perf_trans_file_name):
         with open(opt.perf_trans_file_name, 'rb') as f:
             opt.perf_trans_summarized = pickle.load(f)
@@ -49,7 +51,8 @@ def perfect_trans_summary(opt):
         pickle.dump(opt.perf_trans_summarized, f)
 
 
-def summarize(opt):
+def summarize():
+    opt = Opt.get_instance()
     for i in os.walk(opt.summary_input_path):
         break
     files = i[2]

@@ -1,98 +1,15 @@
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
-from torch import Tensor
 from torch.autograd import Variable
-from math import sqrt, sin, cos
 from datetime import datetime
 from tqdm.notebook import tnrange
-import re, math
+from src.opt import Opt
+import re
+import math
 import numpy as np
-
-
-class PositionalEncoding(nn.Module):
-
-    """A parameter less module that concatenates a number of sine signals at the end of the embedded vectors."""
-
-    def __init__(self, model_dim: int, max_length: int, dropout: float = 0.1):
-        super().__init__()
-
-        if torch.cuda.is_available():
-            dev = "cuda:0"
-        else:
-            dev = "cpu"
-
-        device = torch.device(dev)
-
-        self.model_dim: int = model_dim
-        self.dropout: nn.Dropout = nn.Dropout(dropout)
-        self.add_module('dropout', self.dropout)
-
-        position_vector: Tensor = torch.zeros(max_length, model_dim, requires_grad=False).to(device)
-        # arange = torch.arange(max_length)
-
-        # note to self: this appear to work right now.
-        for pos in range(max_length):
-            for i in range(0, model_dim, 2):
-                # Follwing the formula provided in the paper.
-                position_vector[pos, i] = sin(pos / (10000 ** ((2 * i) / model_dim)))
-                position_vector[pos, i+1] = cos(pos / (10000 ** ((2 * (i + 1)) / model_dim)))
-
-        # position_vector: max_seq_len x model_dim
-        position_vector = position_vector.unsqueeze(0)
-
-        # position_vector: 1 x max_seq_len x model_dim
-        self.register_buffer('position_vector', position_vector)
-
-    def forward(self, x: Tensor) -> Tensor:
-        """
-        The forward pass implementation of the Positional Embedding step.
-        :param x: the tensor containing Batch x Seq_len x model_dim embeddings.
-        :return: the embedded vector with some alterations.
-        """
-
-        x = x * sqrt(self.model_dim)
-        sequence_length = x.size(1)
-        x = x + Variable(self.position_vector[:, :sequence_length], requires_grad=False)
-        x = self.dropout(x)
-        return x
-
-
-class FeedForward(nn.Module):
-
-    """The utility module that is used to implement a feed-forward fully connected Neural Net for the
-    encoder and decoder layers."""
-
-    def __init__(self, model_dim: int, d_ff: int = 2048, dropout: float = 0.1):
-        super().__init__()
-
-        if torch.cuda.is_available():
-            dev = "cuda:0"
-        else:
-            dev = "cpu"
-
-        device = torch.device(dev)
-
-        self.fc1: nn.Linear = nn.Linear(model_dim, d_ff).to(device)
-        self.dropout: nn.Dropout = nn.Dropout(dropout).to(device)
-        self.fc2: nn.Linear = nn.Linear(d_ff, model_dim).to(device)
-
-        self.add_module('fc1', self.fc1)
-        self.add_module('dropout', self.dropout)
-        self.add_module('fc2', self.fc2)
-
-    def forward(self, x: Tensor) -> Tensor:
-
-        """
-        Implements Feed-Forward algorithm with dropout.
-        :param x: a tensor with last dim = model_dim
-        :return: output from the NN
-        """
-
-        x = self.dropout(F.relu(self.fc1(x)))
-        x = self.fc2(x)
-
-        return x
+import os
+from src.transformer_layers import Transformer
+import torch.nn as nn
 
 
 class Log:
@@ -127,15 +44,17 @@ class Log:
         self.file_object = open(self.filename, 'a+', encoding = 'utf-8')
 
 
-def move(opt):
+def move():
+    opt = Opt.get_instance()
+
     def move_lang(lang):
         inpFile1 = open(opt.pc_input_file + lang, 'r', encoding='utf-8')
         inpFile2 = open(opt.nc_input_file + lang, 'r', encoding='utf-8')
         intFile = open(opt.interim_file + lang, 'w', encoding='utf-8')
 
-        for i in tnrange(int(opt.num_mil * 2 * 10**5)):
+        for _ in tnrange(int(opt.num_mil * 2 * 10**5)):
             intFile.write(inpFile2.readline())
-        for i in tnrange(int(opt.num_mil * 8 * 10**5)):
+        for _ in tnrange(int(opt.num_mil * 8 * 10**5)):
             intFile.write(inpFile1.readline())
 
         inpFile1.close()
@@ -145,7 +64,8 @@ def move(opt):
     move_lang(opt.trg_lang)
 
 
-def load_dev_dataset(opt):
+def load_dev_dataset():
+    opt = Opt.get_instance()
     opt.dev_dataset = f'data/{opt.src_lang}/DEV-{opt.src_lang}-{opt.trg_lang}.'
 
     with open(opt.dev_dataset + opt.src_lang, 'r', encoding='utf-8') as f:
@@ -154,10 +74,57 @@ def load_dev_dataset(opt):
         opt.dev_trg_sentences = f.read().split('\n')[:2000]
 
 
-def batch(opt):
-    max_count = {v:(len(opt.src_bins[v])*v) // opt.tokensize for v in opt.bins}
+def load_model():
+    opt = Opt.get_instance()
+
+    model = Transformer(*opt.args)
+    optim = torch.optim.Adam(model.parameters(), lr=0.0001, betas=(0.9, 0.98), eps=1e-9)
+
+    starting_index = 0
+    for p in model.parameters():
+        if p.dim() > 1:
+            nn.init.xavier_uniform_(p)
+
+    # initializing the parameters of the model.
+
+    if not os.path.exists(opt.path):
+        if not os.path.exists(opt.path):
+            os.mkdir(opt.path)
+        opt.log.print(f"No {opt.path} found. Created a new path directory and started using xavier_uniform")
+    else:
+        for i in os.walk(opt.path):
+            break
+        i = i[2]
+        m = 0
+        mf = None
+        suffix_len = len('.model')
+        for file in i:
+            if opt.model_prefix not in file or '.model' not in file:
+                continue
+
+            num = int(file[len(opt.model_prefix):-suffix_len])
+            if num > m:
+                m = num
+                mf = file[:-suffix_len]
+
+        if mf is not None:
+            opt.log.print(f"Starting from last saved {mf}")
+            opt.save_model.load(f'{opt.path}/{mf}')
+            model.load_state_dict(opt.save_model.model_state_dict)
+            optim.load_state_dict(opt.save_model.optim_state_dict)
+            starting_index = m
+        else:
+            opt.log.print(f"Starting from xavier_uniform distribution")
+    opt.starting_index = starting_index
+
+    return model, optim
+
+
+def batch():
+    opt = Opt.get_instance()
+    max_count = {v: (len(opt.src_bins[v])*v) // opt.tokensize for v in opt.bins}
     # print(max_count)
-    cur_count = {v:0 for v in opt.bins}
+    cur_count = {v: 0 for v in opt.bins}
     batch_sizes = {v: opt.tokensize // v for v in opt.bins}
 
     step = 0
@@ -168,15 +135,18 @@ def batch(opt):
         j = cur_count[v]
 
         step += 1
-        if step < opt.starting_index: continue
+        if step < opt.starting_index:
+            continue
 
         size = batch_sizes[v]
         src_list = opt.src_bins[v][i*size: j*size]
         trg_list = opt.trg_bins[v][i*size: j*size]
 
         if j > max_count[v]:
-            if opt.keep_training: cur_count[v] = 0
-            else: del max_count[v]
+            if opt.keep_training:
+                cur_count[v] = 0
+            else:
+                del max_count[v]
 
         if len(src_list) == 0:
             continue
@@ -184,20 +154,22 @@ def batch(opt):
         yield src_list, trg_list
 
 
-def nopeak_mask(size, opt):
+def nopeak_mask(size, ):
+    opt = Opt.get_instance()
     np_mask = np.triu(np.ones((1, size, size)),
                       k=1).astype('uint8')
     np_mask = Variable(torch.from_numpy(np_mask) == 0).to(opt.device)
     return np_mask
 
 
-def create_masks(src, trg, opt):
+def create_masks(src, trg):
+    opt = Opt.get_instance()
     src_mask = (src != opt.src_pad).unsqueeze(-2)
 
     if trg is not None:
         trg_mask = (trg != opt.trg_pad).unsqueeze(-2)
         size = trg.size(1)  # get seq_len for matrix
-        np_mask = nopeak_mask(size, opt).to(opt.device)
+        np_mask = nopeak_mask(size).to(opt.device)
         trg_mask = trg_mask & np_mask
 
     else:
@@ -205,82 +177,78 @@ def create_masks(src, trg, opt):
     return src_mask, trg_mask
 
 
-def k_best_outputs(outputs, out, log_scores, i, k):
-    probs, ix = out[:, -1].data.topk(k)
-    log_probs = torch.Tensor([math.log(p) for p in probs.data.view(-1)]).view(k, -1) + log_scores.transpose(0, 1)
+def k_best_outputs(outputs, pred, log_probs, i, k):
+    probs, idx = pred[:, -1].data.topk(k)
+    log_probs = torch.Tensor([math.log(p) for p in probs.data.view(-1)]).view(k, -1) + log_probs.transpose(0, 1)
     k_probs, k_ix = log_probs.view(-1).topk(k)
 
     row = k_ix // k
     col = k_ix % k
 
     outputs[:, :i] = outputs[row, :i]
-    outputs[:, i] = ix[row, col]
+    outputs[:, i] = idx[row, col]
 
-    log_scores = k_probs.unsqueeze(0)
+    log_probs = k_probs.unsqueeze(0)
 
-    return outputs, log_scores
+    return outputs, log_probs
 
 
-def beam_search(src, model, opt):
-    init_tok = opt.trg_bos
+def beam_search(src, model):
+    opt = Opt.get_instance()
+    bos_token = opt.trg_bos
     src_mask = (src != opt.src_pad).unsqueeze(-2)
-    e_output = model.encoder(src, src_mask)
+    encoder_output = model.encoder(src, src_mask)
 
-    outputs = torch.LongTensor([[init_tok]]).to(opt.device)
+    outputs = torch.LongTensor([[bos_token]]).to(opt.device)
 
-    trg_mask = nopeak_mask(1, opt)
+    trg_mask = nopeak_mask(1)
 
-    out = model.linear(model.decoder(outputs, e_output, src_mask, trg_mask))
-    out = F.softmax(out, dim=-1)
+    pred = model.linear(model.decoder(outputs, encoder_output, src_mask, trg_mask))
+    pred = F.softmax(pred, dim=-1)
 
-    probs, ix = out[:, -1].data.topk(opt.k)
-    log_scores = torch.Tensor([math.log(prob) for prob in probs.data[0]]).unsqueeze(0)
+    probs, idx = pred[:, -1].data.topk(opt.k)
+    log_probs = torch.Tensor([math.log(prob) for prob in probs.data[0]]).unsqueeze(0)
 
     outputs = torch.zeros(opt.k, opt.max_len).long().to(opt.device)
-    outputs[:, 0] = init_tok
-    outputs[:, 1] = ix[0]
+    outputs[:, 0] = bos_token
+    outputs[:, 1] = idx[0]
 
-    e_outputs = torch.zeros(opt.k, e_output.size(-2), e_output.size(-1)).to(opt.device)
-    e_outputs[:, :] = e_output[0]
+    encoder_outputs = torch.zeros(opt.k, encoder_output.size(-2), encoder_output.size(-1)).to(opt.device)
+    encoder_outputs[:, :] = encoder_output[0]
 
-    eos_tok = opt.trg_eos
+    eos_token = opt.trg_eos
     src_mask = (src != opt.src_pad).unsqueeze(-2)
     ind = None
     for i in range(2, opt.max_len):
-
-        trg_mask = nopeak_mask(i, opt)
-
-        out = model.linear(model.decoder(outputs[:, :i],
-                                         e_outputs, src_mask, trg_mask))
-
-        out = F.softmax(out, dim=-1)
-
-        outputs, log_scores = k_best_outputs(outputs, out, log_scores, i, opt.k)
-
-        ones = torch.nonzero(outputs == eos_tok)
-        # ones = (outputs==eos_tok).nonzero() # Occurrences of end symbols for all input sentences.
-        sentence_lengths = torch.zeros(len(outputs), dtype=torch.long).to(opt.device)
+        trg_mask = nopeak_mask(i)
+        pred = model.linear(model.decoder(outputs[:, :i],
+                                          encoder_outputs, src_mask, trg_mask))
+        pred = F.softmax(pred, dim=-1)
+        outputs, log_probs = k_best_outputs(outputs, pred, log_probs, i, opt.k)
+        ones = torch.nonzero(outputs == eos_token)
+        # ones = (outputs==eos_token).nonzero() # Occurrences of end symbols for all input sentences.
+        sequence_lengths = torch.zeros(len(outputs)).to(opt.device)
         for vec in ones:
             i = vec[0]
-            if sentence_lengths[i] == 0:  # First end symbol has not been found yet
-                sentence_lengths[i] = vec[1]  # Position of first end symbol
+            if sequence_lengths[i] == 0:  # First end symbol has not been found yet
+                sequence_lengths[i] = vec[1]  # Position of first end symbol
 
-        num_finished_sentences = len([s for s in sentence_lengths if s > 0])
+        complete_sentence_count = len([s for s in sequence_lengths if s > 0])
 
-        if num_finished_sentences == opt.k:
+        if complete_sentence_count == opt.k:
             alpha = 0.7
-            div = 1 / (sentence_lengths.type_as(log_scores) ** alpha)
-            _, ind = torch.max(log_scores * div, 1)
+            div = 1 / (sequence_lengths.type_as(log_probs) ** alpha)
+            _, ind = torch.max(log_probs * div, 1)
             ind = ind.data[0]
             break
 
     if ind is None:
-        length = (outputs[0] == eos_tok).nonzero()[0]
+        length = (outputs[0] == eos_token).nonzero()[0]
         sentence_list = (outputs[0][1:length]).tolist()
         return ''.join(opt.trg_processor.decode(sentence_list)).replace('_', " ")
 
     else:
-        length = (outputs[ind] == eos_tok).nonzero()[0]
+        length = (outputs[ind] == eos_token).nonzero()[0]
         sentence_list = (outputs[0][1:length]).tolist()
         return ''.join(opt.trg_processor.decode(sentence_list)).replace('_', " ")
 
@@ -293,11 +261,12 @@ def multiple_replace(dict, text):
     return regex.sub(lambda mo: dict[mo.string[mo.start():mo.end()]], text)
 
 
-def translate_sentence(sentence, model, opt):
+def translate_sentence(sentence, model):
+    opt = Opt.get_instance()
     model.eval()
     sentence = Variable(torch.LongTensor([opt.src_processor.encode(sentence)])).to(opt.device)
 
-    sentence = beam_search(sentence, model, opt)
+    sentence = beam_search(sentence, model)
 
     return multiple_replace({' ?': '?', ' !': '!', ' .': '.', '\' ': '\'', ' ,': ','}, sentence)
 

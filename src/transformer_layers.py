@@ -1,10 +1,7 @@
+from src.sub_layers import MultiHeadAttention, FeedForward, PositionalEncoding
+from typing import List, Optional
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from src.multihead_attention import MultiHeadAttention
-from src.utils import *
-from typing import List, Optional
-import copy
 
 Tensor = torch.Tensor
 
@@ -259,7 +256,3 @@ class TransformerDecoder(nn.Module):
             x = layer(x, encoder_output, src_mask, trg_mask)
 
         return x
-
-
-
-

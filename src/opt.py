@@ -1,10 +1,25 @@
 import torch
-from src.save_load import Save
 from rouge import Rouge
 
 
 class Opt:
+
+    __instance = None
+
+    @classmethod
+    def get_instance():
+        if Opt.__instance is None:
+            Opt()
+
+        return Opt.__instance
+
     def __init__(self, src_lang='es'):
+
+        if Opt.__instance is not None:
+            raise Exception("This is a singleton class")
+        else:
+            Opt.__instance = self
+
         self.src_lang = src_lang
         self.trg_lang = 'en'
 
@@ -137,3 +152,23 @@ class Opt:
     @property
     def perf_trans_path(self):
         return f'{self.eval_src_path}/summarized-perfect-translation'
+
+
+class Save:
+    def __init__(self, model_state_dict=None, optim_state_dict=None):
+        self.model_state_dict = model_state_dict
+        self.optim_state_dict = optim_state_dict
+
+    def save(self, filename):
+        torch.save(self.model_state_dict, f'{filename}.model')
+        torch.save(self.optim_state_dict, f'{filename}.optim')
+
+    def load(self, filename):
+
+        if torch.cuda.is_available():
+            device = torch.device('cuda:0')
+        else:
+            device = torch.device('cpu')
+
+        self.model_state_dict = torch.load(f'{filename}.model', map_location=device)
+        self.optim_state_dict = torch.load(f'{filename}.optim', map_location=device)

@@ -1,9 +1,12 @@
 from langdetect import detect
 import os
 from tqdm.notebook import tnrange
+from src.opt import Opt
 import pickle
 
-def read_in_jsons(opt):
+
+def read_in_jsons():
+    opt = Opt.get_instance()
     with open(opt.gv_crowd_path, 'r') as f:
         opt.gv_crowd_json = f.read()
         opt.gv_crowd_json = eval(opt.gv_crowd_json)
@@ -12,7 +15,8 @@ def read_in_jsons(opt):
         opt.gv_snippet_json = eval(opt.gv_snippet_json)
 
 
-def filter_json(json_object, opt):
+def filter_json(json_object):
+    opt = Opt.get_instance()
     with open(json_object) as f:
         json_object = f.read()
     json_object = eval(json_object)
@@ -29,8 +33,9 @@ def filter_json(json_object, opt):
     return filtered_json
 
 
-def join_jsons(opt):
-    temp = {} # title: summary
+def join_jsons():
+    opt = Opt.get_instance()
+    temp = {}  # title: summary
     for item in opt.gv_snippet_json:
         temp[item['title']] = item['summary']
     filtered_json = []
@@ -66,7 +71,8 @@ def filter_txt(l, txt, detect_lang=False):
     return txt
 
 
-def final_json_filter(opt):
+def final_json_filter():
+    opt = Opt.get_instance()
     temp_json = []
     tk0 = tnrange(len(opt.eval_json))
     for index in tk0:
@@ -102,7 +108,8 @@ def final_json_filter(opt):
     opt.final_json = temp_json
 
 
-def mkdir(opt):
+def mkdir():
+    opt = Opt.get_instance()
     temp_path = f"{opt.eval_path}{opt.src_lang}"
     if not os.path.exists(temp_path):
         os.mkdir(temp_path)
@@ -124,21 +131,23 @@ def mkdir(opt):
         os.mkdir(opt.summary_output_path)
 
 
-def preprocess_json(opt):
+def preprocess_json():
+    opt = Opt.get_instance()
     if os.path.exists(opt.final_json_path):
         with open(opt.final_json_path, 'rb') as f:
             opt.final_json = pickle.load(f)
     else:
-        opt.gv_snippet_json = filter_json(opt.gv_snippet_path, opt)
-        opt.gv_crowd_json = filter_json(opt.gv_crowd_path, opt)
-        join_jsons(opt)
-        final_json_filter(opt)
+        opt.gv_snippet_json = filter_json(opt.gv_snippet_path)
+        opt.gv_crowd_json = filter_json(opt.gv_crowd_path)
+        join_jsons()
+        final_json_filter()
 
         with open(opt.final_json_path, 'wb') as f:
             pickle.dump(opt.final_json, f)
 
 
-def write_source_and_target(opt):
+def write_source_and_target():
+    opt = Opt.get_instance()
     for item in opt.final_json:
         src_txt_file_path = f"{opt.src_txt_path}/{item['title']}"
         trg_txt_file_path = f"{opt.trg_txt_path}/{item['title']}"

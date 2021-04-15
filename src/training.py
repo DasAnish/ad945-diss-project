@@ -1,35 +1,18 @@
-import torch
-Tensor = torch.Tensor
 from src.utils import *
 from src.save_load import *
 from src.text_preprocessing import *
+from src.opt import Opt
+import torch
 import sacrebleu
 import numpy as np
 import time
-from src.opt import Opt
-
-Log().close()
-log = Log()
-
-opt = Opt()
+Tensor = torch.Tensor
 
 
-create_fields(opt)
-create_dataset(opt)
-load_dev_dataset(opt)
+def evaluate(model):
+    opt = Opt.get_instance()
 
-if torch.cuda.is_available():
-    dev = "cuda:0"
-else:
-    dev = "cpu"
-
-device = torch.device(dev)
-opt.device = device
-
-
-def evaluate(model, opt):
     model.eval()
-    start = time.time()
 
     refs = []
     hyp = []
@@ -39,7 +22,7 @@ def evaluate(model, opt):
     for i in tk2:
         sentence = opt.dev_src_sentences[i]
         try:
-            translated = translate_sentence(sentence.lower(), model, opt)
+            translated = translate_sentence(sentence.lower(), model)
         except:
             opt.skip.append(i)
         else:
@@ -60,12 +43,14 @@ def evaluate(model, opt):
             bleu = sacrebleu.corpus_bleu(opt.hyp[:-1], [opt.refs[:-1]])
             ter = sacrebleu.corpus_ter(opt.hyp[:-1], [opt.refs[:-1]])
             tk2.set_postfix_str(f"({ter} || {bleu})")
-            log.print(f'{ter} || {bleu}', shell=False)
+            opt.log.print(f'{ter} || {bleu}', shell=False)
 
             return bleu, ter
 
 
-def train_model(model, opt):
+def train_model(model):
+    opt = Opt.get_instance()
+
     model.train()
 
     start = time.time()
@@ -81,7 +66,7 @@ def train_model(model, opt):
     for epoch in tk0:
         temp = time.time()
         tk1 = tnrange(opt.train_len)
-        batch_gen = batch(opt)
+        batch_gen = batch()
         last_batch_loss = 0
         for i in tk1:
             src_lis, trg_lis = next(batch_gen)
@@ -95,7 +80,7 @@ def train_model(model, opt):
             except:
                 del src_tensor
                 continue
-            src_mask, trg_mask = create_masks(src_tensor, trg_tensor, opt)
+            src_mask, trg_mask = create_masks(src_tensor, trg_tensor)
 
             preds = model(src_tensor, trg_tensor, src_mask, trg_mask)
             target = torch.LongTensor(trg_np[:, 1:]).to(opt.device).contiguous().view(-1)
@@ -104,9 +89,9 @@ def train_model(model, opt):
 
             loss.backward()
             total_loss += loss.item()
-            optim.step()
+            opt.optim.step()
             step = opt.starting_index + int(epoch * opt.train_len) + i + 1
-            optim.param_groups[0]['lr'] = (opt.model_dim ** (-0.5)) * min(step ** (-0.5),
+            opt.optim.param_groups[0]['lr'] = (opt.model_dim ** (-0.5)) * min(step ** (-0.5),
                                                                       step * (opt.warmup_steps ** (-1.5)))
 
             del src_mask, src_tensor, trg_mask, trg_tensor, preds, loss
@@ -117,12 +102,12 @@ def train_model(model, opt):
                 diff = '%.3f' % diff
                 last_batch_loss = total_loss
 
-                avg = "%.3f" % (total_loss)
+                avg = "%.3f" % total_loss
                 t = "%.3f" % (time.time() - temp)
                 tt = time.strftime('%H:%M:%S', time.gmtime(time.time() - start))
 
                 output = f"time: {t}s, total: {tt}, loss = {avg}, step = {step}, diff = {diff}"
-                log.print(output, shell=False)
+                opt.log.print(output, shell=False)
                 tk1.set_postfix_str(", " + output + '\n')
 
                 total_loss_at_save += total_loss
@@ -132,7 +117,7 @@ def train_model(model, opt):
             if step % opt.save_every == 0:
                 model_name = f'{opt.path}/{opt.model_prefix}{step}'
                 opt.save_model.model_state_dict = model.state_dict()
-                opt.save_model.optim_state_dict = optim.state_dict()
+                opt.save_model.optim_state_dict = opt.optim.state_dict()
                 opt.save_model.save(model_name)
 
                 avg = (total_loss_at_save / r)
@@ -143,36 +128,46 @@ def train_model(model, opt):
                 avg = '%.3f' % avg
                 diff = '%.3f' % diff
                 output = f"Saving model: {model_name} | avg_loss: {avg} | diff: {diff}"
-                log.print(output, shell=False)
+                opt.log.print(output, shell=False)
                 tk0.set_postfix_str(',' + output + '\n')
 
             if step % opt.train_len == 0:
-                bleu_score, ter = evaluate(model, opt)
+                bleu_score, ter = evaluate(model)
 
                 prev_scores.append(bleu_score.score)
-                if len(prev_scores) > 5: prev_scores.pop(0)
+                if len(prev_scores) > 5:
+                    prev_scores.pop(0)
 
                 prev_avg_score = sum(prev_scores) / len(prev_scores)
 
                 if len(prev_scores) == 3 and prev_avg_score - bleu_score.score < epsilon:
                     break
 
-                log.print(f"{ter} || {bleu_score}")
+                opt.log.print(f"{ter} || {bleu_score}")
                 temp = time.time()
                 model.train()
 
-        log.flush()
+        opt.log.flush()
 
 
 if __name__ == '__main__':
 
     try:
-        model, optim = load_model(opt)
-        opt.optim = optim
+        Log().close()
+        log = Log()
 
-        train_model(model, opt)
+        Opt.get_instance().log = log
+
+        create_fields()
+        create_dataset()
+        load_dev_dataset()
+
+        model, optim = load_model()
+        Opt.get_instance().optim = optim
+
+        train_model(model)
 
     except Exception as e:
-        log.print(e, type=Log.ERROR)
+        log.print(e, type=log.ERROR)
         log.flush()
         raise e

@@ -2,9 +2,12 @@ import os
 import sentencepiece as spm
 import pickle
 from tqdm.notebook import tnrange
+from src.opt import Opt
 
 
-def create_fields(opt):
+def create_fields():
+    opt = Opt.get_instance()
+
     print("initlizing sentence processors")
     opt.src_processor = spm.SentencePieceProcessor()
     opt.src_processor.Init(model_file=f'{opt.model_file}{opt.src_lang}.model')
@@ -17,7 +20,9 @@ def create_fields(opt):
     opt.trg_eos = opt.trg_processor.eos_id()
 
 
-def create_dataset(opt):
+def create_dataset():
+    opt = Opt.get_instance()
+
     opt.bins = [i for i in range(10, opt.max_len + 1)]
 
     if opt.dataset is not None and os.path.exists(opt.dataset):
@@ -55,9 +60,9 @@ def create_dataset(opt):
 
         for v in opt.bins:
             if lsrc <= v and ltrg <= v:
-                for i in range(lsrc, v):
+                for _ in range(lsrc, v):
                     src.append(opt.src_pad)
-                for i in range(ltrg, v):
+                for _ in range(ltrg, v):
                     trg.append(opt.trg_pad)
 
                 opt.src_bins[v].append(src)

@@ -5,12 +5,13 @@ from eval.translate_articles import *
 import torch
 
 
-def get_baseline_scores(opt):
-    read_in_jsons(opt)
-    mkdir(opt)
-    preprocess_json(opt)
-    write_source_and_target(opt)
-    perfect_trans_summary(opt)
+def get_baseline_scores():
+    opt = Opt.get_instance()
+    read_in_jsons()
+    mkdir()
+    preprocess_json()
+    write_source_and_target()
+    perfect_trans_summary()
 
     for i in os.walk(opt.summary_input_path):
         break
@@ -47,21 +48,22 @@ def get_baseline_scores(opt):
             }
 
 
-def get_scores(opt):
-    read_in_jsons(opt)
-    mkdir(opt)
-    preprocess_json(opt)
-    write_source_and_target(opt)
-    perfect_trans_summary(opt)
+def get_scores():
+    opt = Opt.get_instance()
+    read_in_jsons()
+    mkdir()
+    preprocess_json()
+    write_source_and_target()
+    perfect_trans_summary()
     if opt.proper_method:
-        model = load_translator(opt)
+        model = load_translator()
         opt.k = 10
-        translate(model, opt)
+        translate(model)
         del model
         torch.cuda.empty_cache()
     else:
-        translate(None, opt)
-    summarize(opt)
+        translate(None)
+    summarize()
 
     for i in os.walk(opt.summary_input_path):
         break
