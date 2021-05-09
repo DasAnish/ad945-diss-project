@@ -3,6 +3,10 @@ from rouge import Rouge
 
 
 class Opt:
+    '''
+    A singleton class that is used to keep track of the configurations i.e. options and the hyperparameters
+    & some path variables
+    '''
 
     __instance = None
 
@@ -65,26 +69,32 @@ class Opt:
 
     @property
     def pc_input_file(self):
+        # the paracrawl dataset path prefix
         return f'../data/{self.src_lang}/ParaCrawl.{self.src_lang}-{self.trg_lang}.'
 
     @property
     def nc_input_file(self):
+        # the news commentary datset path prefix
         return f'../data/{self.src_lang}/News-Commentary.{self.src_lang}-{self.trg_lang}.'
 
     @property
     def model_file(self):
+        # the sentence-piece model file prefix
         return f'../data/{self.src_lang}/SPM-{self.num_mil}m-8k.{self.src_lang}-{self.trg_lang}.'
 
     @property
     def interim_file(self):
+        # the constructed dataset file
         return f'../data/{self.src_lang}/ParaCrawl.{self.src_lang}-{self.trg_lang}.{self.num_mil}m.'
 
     @property
     def dataset(self):
+        # the tokenized and binned dataset
         return f'../data/{self.src_lang}/tokenized_dataset_{self.src_lang}_{self.num_mil}m'
 
     @property
     def dev_dataset(self):
+        # the evaluation dataset used at regular intervals in the training
         return f'../data/{self.src_lang}/DEV-{self.src_lang}-{self.trg_lang}.'
 
     @property
@@ -157,6 +167,9 @@ class Opt:
 
 
 class Save:
+    '''
+    A utility class that is used to save and load the parameters into the model and optimizer
+    '''
     def __init__(self, model_state_dict=None, optim_state_dict=None):
         self.model_state_dict = model_state_dict
         self.optim_state_dict = optim_state_dict

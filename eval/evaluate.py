@@ -6,6 +6,7 @@ import torch
 
 
 def get_baseline_scores():
+    """Calculates and returns the baselines scores as described in the dissertation"""
     opt = Opt.get_instance()
     read_in_jsons()
     mkdir()
@@ -48,6 +49,7 @@ def get_baseline_scores():
             }
 
 def get_scores():
+    """Cacluates the BLEU and ROUGE scores for the configurations selected."""
     opt = Opt.get_instance()
     read_in_jsons()
     mkdir()

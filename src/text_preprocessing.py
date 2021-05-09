@@ -5,7 +5,10 @@ from tqdm.notebook import tnrange
 from src.opt import Opt
 
 
-def create_fields():
+def create_models():
+    """
+    A function that loads the sentence piece model
+    """
     opt = Opt.get_instance()
 
     print("initlizing sentence processors")
@@ -21,6 +24,10 @@ def create_fields():
 
 
 def create_dataset():
+    """
+    A function to read-in the dataset, tokenize the sentences and place them into the appropriate bin.
+    Finally, it saves the dataset to prevent the need to run this program again and again.
+    """
     opt = Opt.get_instance()
 
     opt.bins = [i for i in range(10, opt.max_len + 1)]

@@ -6,6 +6,7 @@ import pickle
 
 
 def read_in_jsons():
+    """Reads in the JSON from the opt.gv_crowd_path & gv_snippet_path"""
     opt = Opt.get_instance()
     with open(opt.gv_crowd_path, 'r') as f:
         opt.gv_crowd_json = f.read()
@@ -16,6 +17,7 @@ def read_in_jsons():
 
 
 def filter_json(json_object):
+    """Filter the jsons loaded in so that they have the required source language"""
     opt = Opt.get_instance()
     with open(json_object) as f:
         json_object = f.read()
@@ -34,6 +36,7 @@ def filter_json(json_object):
 
 
 def join_jsons():
+    """Join the JSON based on the items present in the crowd JSON"""
     opt = Opt.get_instance()
     temp = {}  # title: summary
     for item in opt.gv_snippet_json:
@@ -47,6 +50,7 @@ def join_jsons():
 
 
 def filter_txt(l, txt, detect_lang=False):
+    """Filtering the text to make sure that only reasonable sentences are present"""
     txt = [i for i in txt.split('\n') if i != '']
     if ' *[' in txt:
         txt = txt[:(txt.index(' *['))]
@@ -72,6 +76,7 @@ def filter_txt(l, txt, detect_lang=False):
 
 
 def final_json_filter():
+    """The final step is to read in the source and target sentences to the JSON"""
     opt = Opt.get_instance()
     temp_json = []
     tk0 = tnrange(len(opt.eval_json))
@@ -109,6 +114,7 @@ def final_json_filter():
 
 
 def mkdir():
+    """Making all the required directories/files to save intermediate results"""
     opt = Opt.get_instance()
     temp_path = f"{opt.eval_path}{opt.src_lang}"
     if not os.path.exists(temp_path):
@@ -132,6 +138,7 @@ def mkdir():
 
 
 def preprocess_json():
+    """Applying all of the smaller step detailed in the dissertaion in one function and saving the final preprocessed JSON as well"""
     opt = Opt.get_instance()
     if os.path.exists(opt.final_json_path):
         with open(opt.final_json_path, 'rb') as f:
@@ -147,6 +154,7 @@ def preprocess_json():
 
 
 def write_source_and_target():
+    """Reading in and writing out the source and target sentences to the required location."""
     opt = Opt.get_instance()
     for item in opt.final_json:
         src_txt_file_path = f"{opt.src_txt_path}/{item['title']}"

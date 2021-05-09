@@ -4,12 +4,13 @@ from tqdm.notebook import tnrange
 from src.transformer_layers import Transformer
 from src.utils import translate_sentence
 from src.sub_layers import PositionalEncoding
-from src.text_preprocessing import create_fields
+from src.text_preprocessing import create_models
 from src.opt import Opt
 import sacrebleu
 
 
 def load_translator():
+    """loading the chosen model and the sentence piece model"""
     opt = Opt.get_instance()
 
     model = Transformer(*opt.args)
@@ -18,11 +19,12 @@ def load_translator():
     model.encoder.positional_encoding = PositionalEncoding(opt.model_dim, 300).to(opt.device)
     model.decoder.positional_embeddings = PositionalEncoding(opt.model_dim, 300).to(opt.device)
     model.eval()
-    create_fields()
+    create_models()
     return model
 
 
 def translate(model):
+    """For the model given, using beam-search to translate the news-artcies"""
     opt = Opt.get_instance()
     opt.translated = []
 

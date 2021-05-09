@@ -6,6 +6,7 @@ import pickle
 
 
 def perfect_trans_summary():
+    """The perf-trans text is used to generate summaries"""
     opt = Opt.get_instance()
     if os.path.exists(opt.perf_trans_file_name):
         with open(opt.perf_trans_file_name, 'rb') as f:
@@ -52,6 +53,7 @@ def perfect_trans_summary():
 
 
 def summarize():
+    """Generating the summaries for the configuration chosen"""
     opt = Opt.get_instance()
     for i in os.walk(opt.summary_input_path):
         break

@@ -10,6 +10,7 @@ Tensor = torch.Tensor
 
 
 def evaluate(model):
+    """A function that evaluates the model using the dev set during the training step"""
     opt = Opt.get_instance()
 
     model.eval()
@@ -49,6 +50,7 @@ def evaluate(model):
 
 
 def train_model(model):
+    """The funtion that encapsulates the training process"""
     opt = Opt.get_instance()
 
     model.train()
@@ -153,12 +155,11 @@ def train_model(model):
 if __name__ == '__main__':
 
     try:
-        Log().close()
         log = Log()
 
         Opt.get_instance().log = log
 
-        create_fields()
+        create_models()
         create_dataset()
         load_dev_dataset()
 
@@ -166,6 +167,7 @@ if __name__ == '__main__':
         Opt.get_instance().optim = optim
 
         train_model(model)
+        log.close()
 
     except Exception as e:
         log.print(e, type=log.ERROR)

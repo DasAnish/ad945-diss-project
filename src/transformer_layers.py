@@ -9,6 +9,7 @@ Tensor = torch.Tensor
 
 
 class Transformer(nn.Module):
+    """The implementation of the Transformer architecture from the "Attention is all you need" paper"""
     def __init__(self, src_vocab_size: int, trg_vocab_size: int,
                  model_dim: int, d_ff: int, heads: int, num_blocks: int,
                  max_seq_len: Optional[int] = 80, dropout: Optional[float] = 0.1,
@@ -45,6 +46,7 @@ class Transformer(nn.Module):
 
 
 class TransformerEncoderLayer(nn.Module):
+    """The class implementing a single encoder layer in the Transformer architecture."""
     def __init__(self, model_dim: int, heads: int, d_ff: int,
                  dropout: Optional[float] = 0.1, norm_before: bool = False):
         super().__init__()
@@ -103,6 +105,7 @@ class TransformerEncoderLayer(nn.Module):
 
 
 class TransformerEncoder(nn.Module):
+    """The class that is a collection of Encoder Layers"""
     def __init__(self, model_dim: int, d_ff: int, heads: int, num_blocks: int,
                  vocab_size: int, max_seq_len: Optional[int] = 80,
                  dropout: Optional[float] = 0.1, norm_before: bool = False):
@@ -143,6 +146,7 @@ class TransformerEncoder(nn.Module):
 
 
 class TransformerDecoderLayer(nn.Module):
+    """The class implementing a single decoder layer in the Transformer architecture."""
     def __init__(self, model_dim: int, heads: int, d_ff: int,
                  dropout: Optional[float] = 0.1, norm_before: bool = False):
         super().__init__()
@@ -217,6 +221,7 @@ class TransformerDecoderLayer(nn.Module):
 
 
 class TransformerDecoder(nn.Module):
+    """The class that is a collection of Decoder Layers"""
     def __init__(self, model_dim: int, d_ff: int, heads: int, num_blocks: int,
                  vocab_size: int, max_seq_len: Optional[int] = 80,
                  dropout: Optional[float] = 0.1, norm_before: bool = True):

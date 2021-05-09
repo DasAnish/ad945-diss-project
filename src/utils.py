@@ -13,6 +13,10 @@ import torch.nn as nn
 
 
 class Log:
+    """
+    A logger that notes the date/time with the text provided.
+    """
+
     LOG, ERROR = 0, 1
 
     def __init__(self, outfile='data/.log', filename='data/logfile.log'):
@@ -45,6 +49,7 @@ class Log:
 
 
 def move():
+    """The function that is used to construct the dataset"""
     opt = Opt.get_instance()
 
     def move_lang(lang):
@@ -65,6 +70,7 @@ def move():
 
 
 def load_dev_dataset():
+    """The function which loads the dev dataset"""
     opt = Opt.get_instance()
     opt.dev_dataset = f'data/{opt.src_lang}/DEV-{opt.src_lang}-{opt.trg_lang}.'
 
@@ -75,6 +81,7 @@ def load_dev_dataset():
 
 
 def load_model():
+    """The function used to load the model's parameters"""
     opt = Opt.get_instance()
 
     model = Transformer(*opt.args)
@@ -121,6 +128,7 @@ def load_model():
 
 
 def batch():
+    """The batching generator"""
     opt = Opt.get_instance()
     max_count = {v: (len(opt.src_bins[v])*v) // opt.tokensize for v in opt.bins}
     # print(max_count)
@@ -154,7 +162,8 @@ def batch():
         yield src_list, trg_list
 
 
-def nopeak_mask(size, ):
+def nopeak_mask(size):
+    """The function which generates an upper triangular matrix"""
     opt = Opt.get_instance()
     np_mask = np.triu(np.ones((1, size, size)),
                       k=1).astype('uint8')
@@ -163,6 +172,12 @@ def nopeak_mask(size, ):
 
 
 def create_masks(src, trg):
+    """
+    The function that makes the source and target mask
+    :param src: The source batch
+    :param trg: The target batch
+    :return: the source and target mask
+    """
     opt = Opt.get_instance()
     src_mask = (src != opt.src_pad).unsqueeze(-2)
 
@@ -178,6 +193,7 @@ def create_masks(src, trg):
 
 
 def k_best_outputs(outputs, pred, log_probs, i, k):
+    """The function that picks the top k output (part of beam search)"""
     probs, idx = pred[:, -1].data.topk(k)
     log_probs = torch.Tensor([math.log(p) for p in probs.data.view(-1)]).view(k, -1) + log_probs.transpose(0, 1)
     k_probs, k_ix = log_probs.view(-1).topk(k)
@@ -194,6 +210,7 @@ def k_best_outputs(outputs, pred, log_probs, i, k):
 
 
 def beam_search(src, model):
+    """The function that implements the beam search (pruned breadth-first search)"""
     opt = Opt.get_instance()
     bos_token = opt.trg_bos
     src_mask = (src != opt.src_pad).unsqueeze(-2)
@@ -254,14 +271,16 @@ def beam_search(src, model):
 
 
 def multiple_replace(dict, text):
-    # Create a regular expression  from the dictionary keys
+    """A function that uses regex to replace certain parts of the sentence to make it suitable for printing"""
+    # compiling the regex based on dictionary
     regex = re.compile("(%s)" % "|".join(map(re.escape, dict.keys())))
 
-    # For each match, look-up corresponding value in dictionary
-    return regex.sub(lambda mo: dict[mo.string[mo.start():mo.end()]], text)
+    # For each match i.e. x look up the value in the dictionary to replace
+    return regex.sub(lambda x: dict[x.string[x.start():x.end()]], text)
 
 
 def translate_sentence(sentence, model):
+    """The function that uses beam search to translate the sentences"""
     opt = Opt.get_instance()
     model.eval()
     sentence = Variable(torch.LongTensor([opt.src_processor.encode(sentence)])).to(opt.device)

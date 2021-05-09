@@ -9,6 +9,12 @@ Tensor = torch.Tensor
 
 
 class MultiHeadAttention(nn.Module):
+    """
+    The nn.Module that implements the Multihead attention operation
+
+    For more information see the paper "Attention is all you need"
+    """
+
     def __init__(self, model_dim: int, heads: int, dropout: float = 0.1):
         super().__init__()
 
@@ -110,11 +116,6 @@ class PositionalEncoding(nn.Module):
         self.register_buffer('position_vector', position_vector)
 
     def forward(self, x: Tensor) -> Tensor:
-        """
-        The forward pass implementation of the Positional Embedding step.
-        :param x: the tensor containing Batch x Seq_len x model_dim embeddings.
-        :return: the embedded vector with some alterations.
-        """
 
         x = x * sqrt(self.model_dim)
         sequence_length = x.size(1)
@@ -147,12 +148,6 @@ class FeedForward(nn.Module):
         self.add_module('fc2', self.fc2)
 
     def forward(self, x: Tensor) -> Tensor:
-
-        """
-        Implements Feed-Forward algorithm with dropout.
-        :param x: a tensor with last dim = model_dim
-        :return: output from the NN
-        """
 
         x = self.dropout(F.relu(self.fc1(x)))
         x = self.fc2(x)
