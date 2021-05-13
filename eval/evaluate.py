@@ -48,6 +48,7 @@ def get_baseline_scores():
             'rouge-crowd::perf-trans': opt.rouge.get_scores(perfect_trans_preds, crowds)
             }
 
+
 def get_scores():
     """Cacluates the BLEU and ROUGE scores for the configurations selected."""
     opt = Opt.get_instance()
